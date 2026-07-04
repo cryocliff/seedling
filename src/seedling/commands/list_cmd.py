@@ -3,7 +3,19 @@ from __future__ import annotations
 import json
 import os
 
-from .. import config, paths
+from .. import config, paths, uv_tool
+
+
+def list_packages(args) -> int:
+    """seed list-packages -- passthrough to `uv pip list` for the active venv."""
+    extra = getattr(args, "extra", None) or []
+    if not os.environ.get("VIRTUAL_ENV"):
+        print("Note: no venv looks active (VIRTUAL_ENV isn't set). "
+              "Run `seed activate <name>` first, or uv will fall back to "
+              "whatever it can find (e.g. a .venv in the current directory).")
+    uv_tool.run(["pip", "list", *extra])
+    return 0
+
 
 
 def _read_venv_python_version(venv_dir) -> str | None:

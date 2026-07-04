@@ -21,15 +21,20 @@ seed remove-user          # wipe everything seedling has ever created
 
 ```
 ~/seedling/
-├── bin/                    uv itself, and the seed-cli shim (nothing on your PATH is required)
+├── system/                 everything seedling needs to run itself
+│   ├── bin/                    uv itself, and the seed-cli shim
+│   ├── tool/                   the uv-managed venv seed-cli runs in
+│   ├── src/                    seedling's own source (see `seed update-commands`)
+│   ├── config/settings.json    seedling's own small config
+│   └── shell/                  the seed.sh / seed.ps1 your shell profile loads
 ├── python/
 │   ├── base/312/           `seed python 312`
 │   └── venvs/myproject/    `seed venv myproject`
 ├── extensions/
 │   └── vscode/
 │       └── app/            portable VS Code — binary, settings, and extensions all in one place
-├── config/settings.json    seedling's own small config (e.g. default base version)
-└── shell/                  the seed.sh / seed.ps1 that your shell profile loads
+└── repo/
+    └── myrepo/             `seed clone-repo <url>`
 ```
 
 Nothing is written to `%APPDATA%`, `~/.vscode`, `~/.local/share`, or any of
@@ -86,12 +91,12 @@ file for the execution policy to block in the first place.
 
 What the installer actually does:
 1. Clones seedling from GitHub (or uses your local checkout) into a temp
-   location, then **copies it into `~/seedling/src`** — a private copy
+   location, then **copies it into `~/seedling/system/src`** — a private copy
    nothing outside of `seed update-commands` ever touches again.
-2. Downloads `uv` straight into `~/seedling/bin` (uv's own installer, just
+2. Downloads `uv` straight into `~/seedling/system/bin` (uv's own installer, just
    redirected — this is the one binary seedling depends on, and it has zero
    dependencies of its own).
-3. Uses that `uv` to install `~/seedling/src` itself as an isolated tool
+3. Uses that `uv` to install `~/seedling/system/src` itself as an isolated tool
    (uv will fetch a private Python for this automatically if needed — you
    still never have to have Python pre-installed).
 4. Writes `seed.sh` / `seed.ps1` — a **shell function**, not just a binary —
@@ -113,19 +118,27 @@ and forwards every other command straight to the real CLI binary,
 |---|---|
 | `seed python <ver>` | Installs a base interpreter, e.g. `seed python 312` → `~/seedling/python/base/312`. Accepts `312`, `3.12`, or `3.12.4`. |
 | `seed list-python` | Lists every base Python installed, and which one is the default for `seed venv`. |
+| `seed remove-python <tag> [-y]` | Deletes a base Python **and** any venvs that were built from it. |
 | `seed venv <name>` | Creates a venv at `~/seedling/python/venvs/<name>` via `uv venv`, off the base Python (the first one you installed, or pass `--python <tag>`). |
 | `seed list-venvs` | Lists every venv, its Python version, and which one (if any) is currently active. |
 | `seed activate <name>` | Activates that venv in your current shell. |
 | `seed deactivate` | Deactivates the current venv in your current shell (runs the `deactivate` function venv's own activation script defines). |
 | `seed install <pkg...>` | Installs packages into the active venv — a direct passthrough to `uv pip install <pkg...>`. |
 | `seed uninstall <pkg...>` | Removes packages from the active venv — a direct passthrough to `uv pip uninstall <pkg...>`. |
+| `seed list-packages` | Lists packages in the active venv — a direct passthrough to `uv pip list`. |
 | `seed remove-venv <name>` | Deletes a single venv from `~/seedling/python/venvs`. |
 | `seed remove-venvs [-y]` | Deletes every venv seedling has created. |
+| `seed vscode [path]` | Installs a fully portable VS Code (first run only) into `~/seedling/extensions/vscode`, then opens it. Comes with Python, Pylance, debugpy, Jupyter, Ruff, and Rainbow CSV pre-installed, plus sane default settings. |
+| `seed clone-repo <url>` | Clones a git repo into `~/seedling/repo/<name>`. |
+| `seed list-repos` | Lists every repo cloned with `seed clone-repo`, and each one's origin remote. |
+| `seed open-repo <name>` | Opens a cloned repo in VS Code. |
+| `seed install-repo <name>` | Installs a cloned repo's dependencies into the active venv (editable install if it has a `pyproject.toml`, otherwise `requirements.txt`). |
+| `seed remove-repo <name> [-y]` | Deletes a cloned repo. |
 | `seed kill-processes all [-y]` | Force-closes every Python and VS Code related process on the machine (not just seedling's). |
 | `seed kill-processes <name> [-y]` | Force-closes every process with that exact name (e.g. `seed kill-processes node`). |
 | `seed update-commands` | Explicitly updates the `seed` CLI itself. See below — nothing else ever does this automatically. |
-| `seed vscode [path]` | Installs a fully portable VS Code (first run only) into `~/seedling/extensions/vscode`, then opens it. Comes with Python, Pylance, debugpy, Jupyter, and Ruff (linting/formatting) pre-installed, plus sane default settings. |
-| `seed remove-user [-y]` | Deletes `~/seedling` entirely, after confirming. Closes any running Python/VS Code processes first so nothing blocks deletion. |
+| `seed remove-user [-y]` | Deletes `~/seedling` entirely, after confirming. Leaves the `seed` shell hook in place. |
+| `seed purge [-y]` | **Fully uninstalls seedling** — deletes `~/seedling` entirely *and* removes the `seed` shell hook from your profile. After this, `seed` stops existing as a command. |
 | `seed where` | Prints the seedling home directory. |
 
 Run `./uninstall.sh` / `uninstall.cmd` (or `.\uninstall.ps1` directly) to
@@ -136,17 +149,17 @@ just what it created).
 
 The installer doesn't install `seed-cli` from wherever you downloaded or
 cloned seedling from — it clones straight from your GitHub repo into
-`~/seedling/src` and installs from that private copy. After that:
+`~/seedling/system/src` and installs from that private copy. After that:
 
 - Deleting your original download folder, or new commits landing on
   GitHub, does nothing to your working `seed` install.
-- The **only** thing that ever changes `~/seedling/src` (and therefore what
+- The **only** thing that ever changes `~/seedling/system/src` (and therefore what
   `seed` does) after the initial install is running:
   ```
   seed update-commands
   ```
   This runs `git pull --ff-only` against the GitHub remote it was originally
-  cloned from, then reinstalls. If `~/seedling/src` somehow isn't a git
+  cloned from, then reinstalls. If `~/seedling/system/src` somehow isn't a git
   checkout (e.g. you installed from a plain local folder with no repo),
   there's no remote to pull from — it just reinstalls from whatever's
   currently there, so it also doubles as a "repair" command if you've
@@ -163,22 +176,25 @@ src/seedling/
   uv_tool.py         locates + invokes the sandboxed uv binary
   commands/
     python_cmd.py   `seed python`
+    python_remove_cmd.py `seed remove-python`
     venv_cmd.py     `seed venv`
-    list_cmd.py     `seed list-python` / `seed list-venvs`
+    list_cmd.py     `seed list-python` / `seed list-venvs` / `seed list-packages`
     activate_cmd.py `seed activate`
     deactivate_cmd.py `seed deactivate`
     install_cmd.py  `seed install`
     uninstall_cmd.py `seed uninstall`
     venv_remove_cmd.py `seed remove-venv(s)`
+    vscode_cmd.py   `seed vscode`
+    repo_cmd.py     `seed clone-repo` / `list-repos` / `remove-repo` / `open-repo` / `install-repo`
     kill_cmd.py     `seed kill-processes`
     update_cmd.py   `seed update-commands`
-    vscode_cmd.py   `seed vscode`
     remove_cmd.py    `seed remove-user`
+    purge_cmd.py    `seed purge` (full uninstall)
   shell/
-    seed.sh.template   copied to ~/seedling/shell/seed.sh at install time
-    seed.ps1.template  copied to ~/seedling/shell/seed.ps1 at install time
+    seed.sh.template   copied to ~/seedling/system/shell/seed.sh at install time
+    seed.ps1.template  copied to ~/seedling/system/shell/seed.ps1 at install time
 install.sh / install.ps1 / install.cmd      bootstrap installers (install.cmd wraps install.ps1 to dodge PowerShell's execution-policy prompt)
-uninstall.sh / uninstall.ps1 / uninstall.cmd  full removal, including the shell hook
+uninstall.sh / uninstall.ps1 / uninstall.cmd  full removal, including the shell hook (same end state as `seed purge`)
 ```
 
 ## Notes / known limits

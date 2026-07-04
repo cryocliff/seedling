@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 
 $SeedlingHome = if ($env:SEEDLING_HOME) { $env:SEEDLING_HOME } else { Join-Path $HOME "seedling" }
-$seedPs1 = Join-Path $SeedlingHome "shell\seed.ps1"
+$seedPs1 = Join-Path $SeedlingHome "system\shell\seed.ps1"
 $hookLine = ". `"$seedPs1`""
 
 if (Test-Path $PROFILE) {

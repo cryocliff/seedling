@@ -48,12 +48,13 @@ if (Test-Path (Join-Path $ScriptDir "pyproject.toml")) {
 # ---------------------------------------------------------------------------
 Info "Setting up $SeedlingHome"
 $null = New-Item -ItemType Directory -Force -Path `
-    "$SeedlingHome\bin", `
+    "$SeedlingHome\system\bin", `
+    "$SeedlingHome\system\config", `
+    "$SeedlingHome\system\shell", `
     "$SeedlingHome\python\base", `
     "$SeedlingHome\python\venvs", `
     "$SeedlingHome\extensions", `
-    "$SeedlingHome\config", `
-    "$SeedlingHome\shell"
+    "$SeedlingHome\repo"
 
 # ---------------------------------------------------------------------------
 # 2b. Copy the source INTO seedling itself. This is what makes updates
@@ -62,8 +63,8 @@ $null = New-Item -ItemType Directory -Force -Path `
 #     moving, or `git pull`-ing wherever you originally downloaded this from
 #     has zero effect on the installed commands after this point.
 # ---------------------------------------------------------------------------
-Info "Copying source into $SeedlingHome\src ..."
-$SrcDir = Join-Path $SeedlingHome "src"
+Info "Copying source into $SeedlingHome\system\src ..."
+$SrcDir = Join-Path $SeedlingHome "system\src"
 if (Test-Path $SrcDir) { Remove-Item -Recurse -Force $SrcDir }
 Copy-Item -Recurse -Force $OriginalSrc $SrcDir
 
@@ -75,10 +76,10 @@ if ($CleanupOriginalSrc) {
 # ---------------------------------------------------------------------------
 # 3. Install uv itself into seedling\bin
 # ---------------------------------------------------------------------------
-$UvExe = Join-Path $SeedlingHome "bin\uv.exe"
+$UvExe = Join-Path $SeedlingHome "system\bin\uv.exe"
 if (-not (Test-Path $UvExe)) {
-    Info "Installing uv into $SeedlingHome\bin ..."
-    $env:UV_INSTALL_DIR = "$SeedlingHome\bin"
+    Info "Installing uv into $SeedlingHome\system\bin ..."
+    $env:UV_INSTALL_DIR = "$SeedlingHome\system\bin"
     $env:UV_NO_MODIFY_PATH = "1"
     Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
 } else {
@@ -91,11 +92,11 @@ if (-not (Test-Path $UvExe)) { Die "uv install appears to have failed (not found
 # 4. Install the seedling CLI itself as an isolated uv tool
 # ---------------------------------------------------------------------------
 Info "Installing the seedling CLI ..."
-$env:UV_TOOL_DIR = "$SeedlingHome\tool"
-$env:UV_TOOL_BIN_DIR = "$SeedlingHome\bin"
+$env:UV_TOOL_DIR = "$SeedlingHome\system\tool"
+$env:UV_TOOL_BIN_DIR = "$SeedlingHome\system\bin"
 & $UvExe tool install --force --reinstall $SrcDir
 
-$SeedCli = Join-Path $SeedlingHome "bin\seed-cli.exe"
+$SeedCli = Join-Path $SeedlingHome "system\bin\seed-cli.exe"
 if (-not (Test-Path $SeedCli)) { Die "seed-cli was not installed correctly." }
 
 # ---------------------------------------------------------------------------
@@ -105,7 +106,7 @@ Info "Writing shell integration ..."
 $templatePath = Join-Path $SrcDir "src\seedling\shell\seed.ps1.template"
 $content = Get-Content $templatePath -Raw
 $content = $content -replace [regex]::Escape("__SEEDLING_HOME_PLACEHOLDER__"), $SeedlingHome
-$seedPs1 = Join-Path $SeedlingHome "shell\seed.ps1"
+$seedPs1 = Join-Path $SeedlingHome "system\shell\seed.ps1"
 Set-Content -Path $seedPs1 -Value $content -Encoding UTF8
 
 $hookLine = ". `"$seedPs1`""

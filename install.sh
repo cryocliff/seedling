@@ -53,12 +53,13 @@ fi
 # 2. Lay out the folder structure
 # ---------------------------------------------------------------------------
 info "Setting up $SEEDLING_HOME"
-mkdir -p "$SEEDLING_HOME/bin" \
+mkdir -p "$SEEDLING_HOME/system/bin" \
+         "$SEEDLING_HOME/system/config" \
+         "$SEEDLING_HOME/system/shell" \
          "$SEEDLING_HOME/python/base" \
          "$SEEDLING_HOME/python/venvs" \
          "$SEEDLING_HOME/extensions" \
-         "$SEEDLING_HOME/config" \
-         "$SEEDLING_HOME/shell"
+         "$SEEDLING_HOME/repo"
 
 # ---------------------------------------------------------------------------
 # 2b. Copy the source INTO seedling itself. This is what makes updates
@@ -67,10 +68,10 @@ mkdir -p "$SEEDLING_HOME/bin" \
 #     moving, or `git pull`-ing wherever you originally downloaded this from
 #     has zero effect on the installed commands after this point.
 # ---------------------------------------------------------------------------
-info "Copying source into $SEEDLING_HOME/src ..."
-rm -rf "$SEEDLING_HOME/src"
-cp -R "$ORIGINAL_SRC" "$SEEDLING_HOME/src"
-SRC_DIR="$SEEDLING_HOME/src"
+info "Copying source into $SEEDLING_HOME/system/src ..."
+rm -rf "$SEEDLING_HOME/system/src"
+cp -R "$ORIGINAL_SRC" "$SEEDLING_HOME/system/src"
+SRC_DIR="$SEEDLING_HOME/system/src"
 
 if [ "$CLEANUP_ORIGINAL_SRC" = "1" ]; then
     rm -rf "$ORIGINAL_SRC"
@@ -81,13 +82,13 @@ fi
 # 3. Install uv itself into seedling/bin (uv is the one true dependency, and
 #    its own official installer has zero prerequisites, same as this script)
 # ---------------------------------------------------------------------------
-if [ ! -x "$SEEDLING_HOME/bin/uv" ]; then
-    info "Installing uv into $SEEDLING_HOME/bin ..."
+if [ ! -x "$SEEDLING_HOME/system/bin/uv" ]; then
+    info "Installing uv into $SEEDLING_HOME/system/bin ..."
     if command -v curl >/dev/null 2>&1; then
-        env UV_INSTALL_DIR="$SEEDLING_HOME/bin" UV_NO_MODIFY_PATH=1 \
+        env UV_INSTALL_DIR="$SEEDLING_HOME/system/bin" UV_NO_MODIFY_PATH=1 \
             sh -c "$(curl -fsSL https://astral.sh/uv/install.sh)"
     elif command -v wget >/dev/null 2>&1; then
-        env UV_INSTALL_DIR="$SEEDLING_HOME/bin" UV_NO_MODIFY_PATH=1 \
+        env UV_INSTALL_DIR="$SEEDLING_HOME/system/bin" UV_NO_MODIFY_PATH=1 \
             sh -c "$(wget -qO- https://astral.sh/uv/install.sh)"
     else
         die "Neither curl nor wget is available; cannot bootstrap uv."
@@ -96,7 +97,7 @@ else
     info "uv already present, skipping."
 fi
 
-UV="$SEEDLING_HOME/bin/uv"
+UV="$SEEDLING_HOME/system/bin/uv"
 [ -x "$UV" ] || die "uv install appears to have failed (not found at $UV)."
 
 # ---------------------------------------------------------------------------
@@ -105,19 +106,19 @@ UV="$SEEDLING_HOME/bin/uv"
 #    `seed update-commands` is the only thing that ever re-runs this step.
 # ---------------------------------------------------------------------------
 info "Installing the seedling CLI ..."
-env UV_TOOL_DIR="$SEEDLING_HOME/tool" UV_TOOL_BIN_DIR="$SEEDLING_HOME/bin" \
+env UV_TOOL_DIR="$SEEDLING_HOME/system/tool" UV_TOOL_BIN_DIR="$SEEDLING_HOME/system/bin" \
     "$UV" tool install --force --reinstall "$SRC_DIR"
 
-[ -x "$SEEDLING_HOME/bin/seed-cli" ] || die "seed-cli was not installed correctly."
+[ -x "$SEEDLING_HOME/system/bin/seed-cli" ] || die "seed-cli was not installed correctly."
 
 # ---------------------------------------------------------------------------
 # 5. Write the `seed` shell function and hook it into the user's shell
 # ---------------------------------------------------------------------------
 info "Writing shell integration ..."
 sed "s#__SEEDLING_HOME_PLACEHOLDER__#$SEEDLING_HOME#g" \
-    "$SRC_DIR/src/seedling/shell/seed.sh.template" > "$SEEDLING_HOME/shell/seed.sh"
+    "$SRC_DIR/src/seedling/shell/seed.sh.template" > "$SEEDLING_HOME/system/shell/seed.sh"
 
-HOOK_LINE=". \"$SEEDLING_HOME/shell/seed.sh\""
+HOOK_LINE=". \"$SEEDLING_HOME/system/shell/seed.sh\""
 
 add_hook() {
     profile="$1"
@@ -140,12 +141,12 @@ esac
 
 info "seedling is installed."
 echo
-echo "Open a new terminal (or run: . \"$SEEDLING_HOME/shell/seed.sh\") and try:"
+echo "Open a new terminal (or run: . \"$SEEDLING_HOME/system/shell/seed.sh\") and try:"
 echo "  seed python 312"
 echo "  seed venv myproject"
 echo "  seed activate myproject"
 echo "  seed vscode"
 echo
-echo "Note: seed-cli was installed from a private copy at $SEEDLING_HOME/src."
+echo "Note: seed-cli was installed from a private copy at $SEEDLING_HOME/system/src."
 echo "Nothing updates it automatically -- run 'seed update-commands' whenever"
 echo "you want to pull in changes."

@@ -3,7 +3,7 @@
 set -eu
 
 SEEDLING_HOME="${SEEDLING_HOME:-$HOME/seedling}"
-HOOK_LINE=". \"$SEEDLING_HOME/shell/seed.sh\""
+HOOK_LINE=". \"$SEEDLING_HOME/system/shell/seed.sh\""
 
 for profile in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
     [ -f "$profile" ] || continue

@@ -6,7 +6,7 @@
 # a plain subprocess can never do.
 
 __SEEDLING_HOME="__SEEDLING_HOME_PLACEHOLDER__"
-__SEEDLING_CLI="$__SEEDLING_HOME/bin/seed-cli"
+__SEEDLING_CLI="$__SEEDLING_HOME/system/bin/seed-cli"
 
 seed() {
     if [ "$1" = "activate" ]; then

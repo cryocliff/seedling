@@ -6,7 +6,7 @@
 # something a plain child process can never do.
 
 $script:SeedlingHome = "__SEEDLING_HOME_PLACEHOLDER__"
-$script:SeedlingCli = Join-Path $script:SeedlingHome "bin\seed-cli.exe"
+$script:SeedlingCli = Join-Path $script:SeedlingHome "system\bin\seed-cli.exe"
 
 function seed {
     param(

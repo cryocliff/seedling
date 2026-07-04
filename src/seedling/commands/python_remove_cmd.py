@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import shutil
+
+from .. import config, paths
+from . import kill_cmd, python_cmd
+
+
+def _venvs_using_base(base_dir) -> list:
+    """Best-effort match: uv writes the interpreter's directory into each
+    venv's pyvenv.cfg as `home`. If that path sits under (or matches) the
+    base Python's directory, the venv was built from it."""
+    matches = []
+    if not paths.VENVS_DIR.exists():
+        return matches
+
+    base_resolved = str(base_dir.resolve())
+    for v in sorted(paths.VENVS_DIR.iterdir()):
+        if not v.is_dir():
+            continue
+        cfg = v / "pyvenv.cfg"
+        if not cfg.exists():
+            continue
+        try:
+            text = cfg.read_text()
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if line.strip().lower().startswith("home"):
+                home_value = line.split("=", 1)[1].strip()
+                if home_value.startswith(base_resolved) or base_resolved.startswith(home_value):
+                    matches.append(v)
+                break
+    return matches
+
+
+def run(args) -> int:
+    tag = getattr(args, "tag", None)
+    if not tag:
+        print("Usage: seed remove-python <tag>")
+        return 1
+
+    base_dir = python_cmd.resolve_base(tag)
+    if base_dir is None:
+        print(f"No base Python installed with tag '{tag}'. Run: seed list-python")
+        return 1
+
+    affected_venvs = _venvs_using_base(base_dir)
+
+    if not getattr(args, "yes", False):
+        print(f"This will delete base Python '{tag}' ({base_dir.name})")
+        if affected_venvs:
+            print(f"and the {len(affected_venvs)} venv(s) built from it:")
+            for v in affected_venvs:
+                print(f"  - {v.name}")
+        print("It will also force-close any running Python/VS Code processes "
+              "first (not just seedling's) so nothing blocks deletion.")
+        answer = input("Type 'yes' to confirm: ").strip().lower()
+        if answer != "yes":
+            print("Aborted. Nothing was deleted.")
+            return 1
+
+    print("Closing Python and VS Code processes so nothing is left in use...")
+    killed = kill_cmd.kill_python_and_vscode()
+    print(f"Closed {len(killed)} process(es)." if killed else "Nothing matching was running.")
+
+    for v in affected_venvs:
+        shutil.rmtree(v, ignore_errors=True)
+
+    shutil.rmtree(base_dir, ignore_errors=True)
+    paths.base_alias_file(tag).unlink(missing_ok=True)
+
+    if config.get_default_base() == tag:
+        remaining = sorted(
+            p.name[: -len(".alias.json")] for p in paths.BASE_DIR.glob("*.alias.json")
+        )
+        new_default = remaining[0] if remaining else None
+        cfg = config.load()
+        cfg["default_base"] = new_default
+        config.save(cfg)
+        if new_default:
+            print(f"Default base for `seed venv` switched to '{new_default}'.")
+        else:
+            print("No base Python interpreters left; `seed venv` will need one installed first.")
+
+    print(f"Removed base Python '{tag}' and {len(affected_venvs)} associated venv(s).")
+    return 0

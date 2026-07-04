@@ -205,6 +205,20 @@ def install(force: bool = False) -> list[str] | None:
     return cli
 
 
+def open_window(cli: list[str], path: str) -> None:
+    """Open VS Code at `path` via its CLI entry point, fully detached from
+    seedling's own process so it never blocks or leaks output into the
+    caller's terminal. Shared by `seed vscode` and `seed open-repo`."""
+    popen_kwargs = dict(_QUIET)
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+    else:
+        popen_kwargs["start_new_session"] = True
+    subprocess.Popen([*cli, path], **popen_kwargs)
+
+
 def run(args) -> int:
     cli = install(force=getattr(args, "reinstall", False))
     if cli is None:
@@ -213,14 +227,5 @@ def run(args) -> int:
 
     open_path = getattr(args, "path", None) or str(Path.cwd())
     print(f"Opening VS Code -> {open_path}")
-
-    popen_kwargs = dict(_QUIET)
-    if os.name == "nt":
-        popen_kwargs["creationflags"] = (
-            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-        )
-    else:
-        popen_kwargs["start_new_session"] = True
-
-    subprocess.Popen([*cli, open_path], **popen_kwargs)
+    open_window(cli, open_path)
     return 0

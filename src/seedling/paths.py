@@ -5,7 +5,15 @@ Everything seedling touches lives under one directory so nothing gets
 scattered across the filesystem:
 
 ~/seedling/
-    bin/                 <- the uv binary (and any other tool shims) live here
+    system/               <- everything seedling needs to run itself, kept
+        bin/                 out of the way of the stuff you actually use
+        tool/             <- the uv-managed venv seed-cli itself runs in
+        src/              <- seedling's own source (see `seed update-commands`)
+        config/
+            settings.json <- seedling's own config (default python version, etc.)
+        shell/
+            seed.sh       <- sourced by bash/zsh to define the `seed` function
+            seed.ps1      <- dot-sourced by PowerShell to define the `seed` function
     python/
         base/<tag>/       <- base python installs, e.g. base/312
         venvs/<name>/     <- virtual environments built off a base python
@@ -14,11 +22,8 @@ scattered across the filesystem:
             app/          <- the portable VS Code install itself
             data/         <- --user-data-dir (settings, keybindings, etc.)
             extensions/   <- --extensions-dir
-    config/
-        settings.json     <- seedling's own config (default python version, etc.)
-    shell/
-        seed.sh           <- sourced by bash/zsh to define the `seed` function
-        seed.ps1          <- dot-sourced by PowerShell to define the `seed` function
+    repo/
+        <name>/           <- repos cloned with `seed clone-repo`
 """
 
 from __future__ import annotations
@@ -36,31 +41,42 @@ def seedling_home() -> Path:
 
 
 HOME = seedling_home()
-BIN_DIR = HOME / "bin"
-TOOL_DIR = HOME / "tool"
-SRC_DIR = HOME / "src"
+
+# Everything seedling needs to operate itself lives under system/, so the
+# top level of ~/seedling stays limited to system/, python/, extensions/,
+# and repo/ -- the folders someone actually cares about browsing.
+SYSTEM_DIR = HOME / "system"
+BIN_DIR = SYSTEM_DIR / "bin"
+TOOL_DIR = SYSTEM_DIR / "tool"
+SRC_DIR = SYSTEM_DIR / "src"
+CONFIG_DIR = SYSTEM_DIR / "config"
+CONFIG_FILE = CONFIG_DIR / "settings.json"
+SHELL_DIR = SYSTEM_DIR / "shell"
+
 PYTHON_DIR = HOME / "python"
 BASE_DIR = PYTHON_DIR / "base"
 VENVS_DIR = PYTHON_DIR / "venvs"
+
 EXTENSIONS_DIR = HOME / "extensions"
 VSCODE_DIR = EXTENSIONS_DIR / "vscode"
 VSCODE_APP_DIR = VSCODE_DIR / "app"
 VSCODE_DATA_DIR = VSCODE_DIR / "data"
 VSCODE_EXTENSIONS_DIR = VSCODE_DIR / "extensions"
-CONFIG_DIR = HOME / "config"
-CONFIG_FILE = CONFIG_DIR / "settings.json"
-SHELL_DIR = HOME / "shell"
+
+REPO_DIR = HOME / "repo"
 
 ALL_DIRS = [
     HOME,
+    SYSTEM_DIR,
     BIN_DIR,
+    CONFIG_DIR,
+    SHELL_DIR,
     PYTHON_DIR,
     BASE_DIR,
     VENVS_DIR,
     EXTENSIONS_DIR,
     VSCODE_DIR,
-    CONFIG_DIR,
-    SHELL_DIR,
+    REPO_DIR,
 ]
 
 
@@ -88,3 +104,7 @@ def base_alias_file(tag: str) -> Path:
 
 def venv_dir(name: str) -> Path:
     return VENVS_DIR / name
+
+
+def repo_dir(name: str) -> Path:
+    return REPO_DIR / name
