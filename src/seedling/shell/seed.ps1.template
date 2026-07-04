@@ -1,0 +1,39 @@
+# seedling shell integration (PowerShell)
+# Installed by install.ps1. Dot-sourced from your $PROFILE.
+#
+# `seed` is a PowerShell FUNCTION, not just a binary, because `seed activate`
+# needs to modify environment/session state in *your current shell* --
+# something a plain child process can never do.
+
+$script:SeedlingHome = "__SEEDLING_HOME_PLACEHOLDER__"
+$script:SeedlingCli = Join-Path $script:SeedlingHome "bin\seed-cli.exe"
+
+function seed {
+    param(
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$Args
+    )
+
+    if ($Args.Count -ge 1 -and $Args[0] -eq "activate") {
+        $rest = $Args[1..($Args.Count - 1)]
+        $scriptPath = & $script:SeedlingCli activate @rest --print-path
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($scriptPath)) {
+            & $script:SeedlingCli activate @rest
+            return
+        }
+        . $scriptPath
+        Write-Host "Activated: $($rest[0])"
+        return
+    }
+
+    if ($Args.Count -ge 1 -and $Args[0] -eq "deactivate") {
+        if (Get-Command deactivate -ErrorAction SilentlyContinue) {
+            deactivate
+        } else {
+            Write-Host "No active seedling venv to deactivate."
+        }
+        return
+    }
+
+    & $script:SeedlingCli @Args
+}
