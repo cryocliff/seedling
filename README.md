@@ -25,7 +25,8 @@ seed remove-user          # wipe everything seedling has ever created
 │   ├── bin/                    uv itself, and the seed-cli shim
 │   ├── tool/                   the uv-managed venv seed-cli runs in
 │   ├── src/                    seedling's own source (see `seed update-commands`)
-│   ├── config/settings.json    seedling's own small config
+│   ├── config/settings.json    seedling's own small config (see `seed config`)
+│   ├── logs/                   one log file per day -- every command + its output
 │   └── shell/                  the seed.sh / seed.ps1 your shell profile loads
 ├── python/
 │   ├── base/312/           `seed python 312`
@@ -197,9 +198,12 @@ pyproject.toml
 src/seedling/
   cli.py            argparse dispatcher
   paths.py          single source of truth for the ~/seedling folder layout
-  config.py         tiny JSON config (default base python, etc.)
-  uv_tool.py         locates + invokes the sandboxed uv binary
-  git_tool.py       locates git, bootstraps portable MinGit on Windows
+  config.py         JSON config (default base, default venv, update source, etc.) + `seed config`'s KNOWN_KEYS
+  confirm.py        shared -y / --preview / --non-interactive handling for destructive commands
+  runlog.py         tees stdout/stderr into ~/seedling/system/logs/, one file per day
+  download.py       SHA-256-verifying download helper (MinGit, VS Code)
+  uv_tool.py         locates + invokes the sandboxed uv binary, tags its output `[uv]`
+  git_tool.py       locates git, bootstraps portable MinGit on Windows, tags streamed output `[git]`
   fsutil.py         retrying, cwd-aware directory deletion (see DOCUMENTATION.md)
   colors.py         minimal ANSI color helper (NO_COLOR/non-tty aware)
   commands/
@@ -216,6 +220,9 @@ src/seedling/
     repo_cmd.py     `seed clone-repo` / `list-repos` / `remove-repo` / `open-repo` / `install-repo`
     kill_cmd.py     `seed kill-processes`
     update_cmd.py   `seed update-commands`
+    summary_cmd.py  `seed summary`
+    status_cmd.py   `seed status`
+    config_cmd.py   `seed config`
     remove_cmd.py    `seed remove-user`
     purge_cmd.py    `seed purge` (full uninstall)
   shell/
