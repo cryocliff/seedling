@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
-import shutil
 
-from .. import paths
+from .. import confirm, fsutil, paths
 from . import kill_cmd
+
+_KILL_NOTE = ("any running Python/VS Code processes will be force-closed "
+              "first (not just seedling's) so nothing blocks deletion")
 
 
 def _warn_if_active(target) -> None:
@@ -36,26 +38,44 @@ def run_all(args) -> int:
         print("No venvs to remove.")
         return 0
 
+    if confirm.preview_requested(args):
+        confirm.print_preview(
+            f"delete {len(venvs)} venv(s)",
+            [str(v) for v in venvs],
+            notes=[_KILL_NOTE],
+        )
+        return 0
+
     for v in venvs:
         _warn_if_active(v)
 
-    if not getattr(args, "yes", False):
+    if not confirm.auto_confirmed(args):
         print(f"This will permanently delete {len(venvs)} venv(s) from {paths.VENVS_DIR}:")
         for v in venvs:
             print(f"  - {v.name}")
         print("It will also force-close any running Python/VS Code processes "
               "first (not just seedling's) so nothing blocks deletion.")
-        answer = input("Type 'yes' to confirm: ").strip().lower()
-        if answer != "yes":
-            print("Aborted. Nothing was deleted.")
-            return 1
+    if not confirm.confirm(args):
+        print("Aborted. Nothing was deleted.")
+        return 1
 
     _close_processes()
 
+    all_failures: list[str] = []
+    removed = 0
     for v in venvs:
-        shutil.rmtree(v, ignore_errors=True)
+        failures = fsutil.robust_rmtree(v)
+        if failures:
+            all_failures.extend(failures)
+        else:
+            removed += 1
 
-    print(f"Deleted {len(venvs)} venv(s).")
+    print(f"Deleted {removed} venv(s).")
+    if all_failures:
+        print("Some files could not be removed after several attempts:")
+        for f in all_failures:
+            print(f"  - {f}")
+        return 1
     return 0
 
 
@@ -69,20 +89,33 @@ def run_one(args) -> int:
         print(f"No venv named '{args.name}' found in {paths.VENVS_DIR}")
         return 1
 
+    if confirm.preview_requested(args):
+        confirm.print_preview(
+            f"delete venv '{args.name}'",
+            [str(target)],
+            notes=[_KILL_NOTE],
+        )
+        return 0
+
     _warn_if_active(target)
 
-    if not getattr(args, "yes", False):
-        answer = input(
-            f"Delete venv '{args.name}' at {target}? This will also "
-            "force-close any running Python/VS Code processes first (not "
-            "just seedling's). Type 'yes' to confirm: "
-        ).strip().lower()
-        if answer != "yes":
-            print("Aborted. Nothing was deleted.")
-            return 1
+    if not confirm.confirm(
+        args,
+        f"Delete venv '{args.name}' at {target}? This will also "
+        "force-close any running Python/VS Code processes first (not "
+        "just seedling's).",
+    ):
+        print("Aborted. Nothing was deleted.")
+        return 1
 
     _close_processes()
 
-    shutil.rmtree(target, ignore_errors=True)
+    failures = fsutil.robust_rmtree(target)
+    if failures:
+        print(f"Some files in '{args.name}' could not be removed after several attempts:")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+
     print(f"Deleted venv '{args.name}'.")
     return 0

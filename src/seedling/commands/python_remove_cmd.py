@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import shutil
-
-from .. import config, paths
+from .. import config, confirm, fsutil, paths
 from . import kill_cmd, python_cmd
 
 
@@ -47,7 +45,19 @@ def run(args) -> int:
 
     affected_venvs = _venvs_using_base(base_dir)
 
-    if not getattr(args, "yes", False):
+    if confirm.preview_requested(args):
+        items = [f"{base_dir}  (base Python '{tag}')"]
+        items += [f"{v}  (venv built from it)" for v in affected_venvs]
+        items.append(f"{paths.base_alias_file(tag)}  (alias file)")
+        confirm.print_preview(
+            f"delete base Python '{tag}' and {len(affected_venvs)} venv(s)",
+            items,
+            notes=["any running Python/VS Code processes will be force-closed "
+                   "first (not just seedling's) so nothing blocks deletion"],
+        )
+        return 0
+
+    if not confirm.auto_confirmed(args):
         print(f"This will delete base Python '{tag}' ({base_dir.name})")
         if affected_venvs:
             print(f"and the {len(affected_venvs)} venv(s) built from it:")
@@ -55,19 +65,19 @@ def run(args) -> int:
                 print(f"  - {v.name}")
         print("It will also force-close any running Python/VS Code processes "
               "first (not just seedling's) so nothing blocks deletion.")
-        answer = input("Type 'yes' to confirm: ").strip().lower()
-        if answer != "yes":
-            print("Aborted. Nothing was deleted.")
-            return 1
+    if not confirm.confirm(args):
+        print("Aborted. Nothing was deleted.")
+        return 1
 
     print("Closing Python and VS Code processes so nothing is left in use...")
     killed = kill_cmd.kill_python_and_vscode()
     print(f"Closed {len(killed)} process(es)." if killed else "Nothing matching was running.")
 
+    all_failures: list[str] = []
     for v in affected_venvs:
-        shutil.rmtree(v, ignore_errors=True)
+        all_failures.extend(fsutil.robust_rmtree(v))
 
-    shutil.rmtree(base_dir, ignore_errors=True)
+    all_failures.extend(fsutil.robust_rmtree(base_dir))
     paths.base_alias_file(tag).unlink(missing_ok=True)
 
     if config.get_default_base() == tag:
@@ -82,6 +92,12 @@ def run(args) -> int:
             print(f"Default base for `seed venv` switched to '{new_default}'.")
         else:
             print("No base Python interpreters left; `seed venv` will need one installed first.")
+
+    if all_failures:
+        print("Some files could not be removed after several attempts:")
+        for f in all_failures:
+            print(f"  - {f}")
+        return 1
 
     print(f"Removed base Python '{tag}' and {len(affected_venvs)} associated venv(s).")
     return 0

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 
-from .. import config, paths, uv_tool
+from .. import colors, config, paths, uv_tool
 
 
 def _normalize_tag(raw: str) -> tuple[str, str]:
@@ -84,7 +84,7 @@ def run(args) -> int:
     if config.get_default_base() is None:
         config.set_default_base(tag)
 
-    print(f"Done. Python {version_spec} is available as base '{tag}' "
-          f"(-> {installed.name}).")
+    print(colors.ok(f"Done. Python {version_spec} is available as base '{tag}'") +
+          f" (-> {installed.name}).")
     print(f"Create a venv from it with:  seed venv <name>")
     return 0

@@ -6,18 +6,18 @@
 # Usage (from a local checkout of this repo):
 #   ./install.sh
 #
-# Usage (remote, once hosted):
-#   curl -fsSL https://.../install.sh | sh
-#   SEEDLING_REPO=https://github.com/you/seedling.git curl -fsSL .../install.sh | sh
+# Usage (remote):
+#   curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh
+#   SEEDLING_REPO=https://github.com/someone/fork.git curl -fsSL .../install.sh | sh
 
 set -eu
 
-# Change this once you've pushed seedling to your own GitHub repo, then host
-# this script's raw URL so people can install with a single line, same as uv:
-#   curl -fsSL https://raw.githubusercontent.com/<you>/seedling/main/install.sh | sh
-# Can also be overridden per-run without editing the file:
-#   SEEDLING_REPO=https://github.com/someone/fork.git curl -fsSL .../install.sh | sh
-DEFAULT_SEEDLING_REPO="https://github.com/CHANGE_ME/seedling.git"
+# Where seedling is cloned from when this script isn't run from inside a
+# local checkout. Can be overridden per-run without editing the file --
+# SEEDLING_REPO accepts a git URL or a plain directory path:
+#   SEEDLING_REPO=https://github.com/someone/fork.git ./install.sh
+#   SEEDLING_REPO=/mnt/share/seedling ./install.sh
+DEFAULT_SEEDLING_REPO="https://github.com/cryocliff/seedling.git"
 
 SEEDLING_HOME="${SEEDLING_HOME:-$HOME/seedling}"
 SEEDLING_REPO="${SEEDLING_REPO:-$DEFAULT_SEEDLING_REPO}"
@@ -31,17 +31,19 @@ die()   { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
+INSTALLED_FROM_DIR=""
 if [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
     ORIGINAL_SRC="$SCRIPT_DIR"
     CLEANUP_ORIGINAL_SRC=0
+elif [ -d "$SEEDLING_REPO" ] && [ -f "$SEEDLING_REPO/pyproject.toml" ]; then
+    # SEEDLING_REPO can be a plain directory instead of a git URL -- e.g. a
+    # network drive holding a copy of this repo, on machines/networks with
+    # no GitHub access at all.
+    info "Installing from directory $SEEDLING_REPO ..."
+    ORIGINAL_SRC="$SEEDLING_REPO"
+    CLEANUP_ORIGINAL_SRC=0
+    INSTALLED_FROM_DIR="$SEEDLING_REPO"
 else
-    case "$SEEDLING_REPO" in
-        *CHANGE_ME*)
-            die "No local pyproject.toml found next to this script, and no repo is configured. \
-Either run this from inside a seedling checkout, set SEEDLING_REPO=<git url>, \
-or edit DEFAULT_SEEDLING_REPO at the top of install.sh once you've pushed this to GitHub."
-            ;;
-    esac
     command -v git >/dev/null 2>&1 || die "git is required to clone $SEEDLING_REPO."
     ORIGINAL_SRC="$(mktemp -d)"
     CLEANUP_ORIGINAL_SRC=1
@@ -75,6 +77,13 @@ SRC_DIR="$SEEDLING_HOME/system/src"
 
 if [ "$CLEANUP_ORIGINAL_SRC" = "1" ]; then
     rm -rf "$ORIGINAL_SRC"
+fi
+
+# When installing from a directory, remember it as the update source so
+# `seed update-commands` knows where to look for newer copies later.
+if [ -n "$INSTALLED_FROM_DIR" ] && [ ! -f "$SEEDLING_HOME/system/config/settings.json" ]; then
+    printf '{\n  "update_source": "%s"\n}\n' "$INSTALLED_FROM_DIR" \
+        > "$SEEDLING_HOME/system/config/settings.json"
 fi
 
 

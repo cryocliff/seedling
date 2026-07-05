@@ -37,3 +37,16 @@ function seed {
 
     & $script:SeedlingCli @Args
 }
+
+# Auto-activate the configured default venv in every new shell
+# (set one with: seed config set default_venv <name>). Skipped when some
+# venv is already active. SEEDLING_NO_LOG keeps this startup query from
+# spamming seedling's command log on every shell launch.
+if (-not $env:VIRTUAL_ENV) {
+    $env:SEEDLING_NO_LOG = "1"
+    $script:SeedlingDefaultVenv = (& $script:SeedlingCli config get default_venv 2>$null | Select-Object -First 1)
+    Remove-Item Env:SEEDLING_NO_LOG -ErrorAction SilentlyContinue
+    if ($script:SeedlingDefaultVenv) {
+        seed activate $script:SeedlingDefaultVenv | Out-Null
+    }
+}

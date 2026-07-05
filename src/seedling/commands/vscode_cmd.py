@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 import os
 import platform
-import shutil
 import subprocess
 import tarfile
 import urllib.request
 import zipfile
 from pathlib import Path
 
-from .. import paths
+from .. import download, paths
 
 # A minimal, opinionated starter kit: Python debugging, Jupyter, and linting.
 DEFAULT_EXTENSIONS = [
@@ -60,10 +59,22 @@ def _os_build() -> tuple[str, str]:
     return arch, "tar"
 
 
-def _download(url: str, dest: Path) -> None:
-    print(f"Downloading VS Code from {url} ...")
-    with urllib.request.urlopen(url) as resp, open(dest, "wb") as f:
-        shutil.copyfileobj(resp, f)
+def _resolve_download(os_id: str) -> tuple[str, str | None]:
+    """Ask VS Code's update API for the latest stable build's direct URL and
+    its published SHA-256, so the archive can be verified after download.
+    Falls back to the plain redirect URL (no checksum) if the API is
+    unreachable -- e.g. on locked-down networks."""
+    api = f"https://update.code.visualstudio.com/api/update/{os_id}/stable/latest"
+    try:
+        req = urllib.request.Request(api, headers={"User-Agent": "seedling"})
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read())
+        url = data.get("url")
+        if url:
+            return url, data.get("sha256hash")
+    except (OSError, ValueError):
+        pass
+    return f"https://code.visualstudio.com/sha/download?build=stable&os={os_id}", None
 
 
 def _extract(archive: Path, dest: Path, kind: str) -> None:
@@ -167,11 +178,16 @@ def install(force: bool = False) -> list[str] | None:
         return cli
 
     os_id, kind = _os_build()
-    url = f"https://code.visualstudio.com/sha/download?build=stable&os={os_id}"
+    url, sha256 = _resolve_download(os_id)
     tmp_archive = paths.VSCODE_DIR / f"vscode-download.{'zip' if kind == 'zip' else 'tar.gz'}"
 
     paths.VSCODE_DIR.mkdir(parents=True, exist_ok=True)
-    _download(url, tmp_archive)
+    print(f"Downloading VS Code from {url} ...")
+    try:
+        download.fetch(url, tmp_archive, expected_sha256=sha256, label="VS Code")
+    except download.ChecksumMismatch as e:
+        print(f"error: {e}")
+        return None
     _extract(tmp_archive, paths.VSCODE_APP_DIR, kind)
     tmp_archive.unlink(missing_ok=True)
 

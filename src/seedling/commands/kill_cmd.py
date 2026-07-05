@@ -18,6 +18,8 @@ import platform
 import signal
 import subprocess
 
+from .. import colors, confirm
+
 PYTHON_PROCESS_NAMES_UNIX = [
     "python", "python3",
     "python3.8", "python3.9", "python3.10", "python3.11",
@@ -82,6 +84,47 @@ def _kill_windows(images: list[str], exclude: set[int]) -> list[str]:
     return killed
 
 
+def _list_windows(images: list[str], exclude: set[int]) -> list[str]:
+    """What would be killed: 'image (pid N)' entries, via tasklist."""
+    found: list[str] = []
+    for image in images:
+        result = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {image}", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, check=False,
+        )
+        for line in result.stdout.splitlines():
+            parts = [p.strip('"') for p in line.split('","')]
+            if len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) not in exclude:
+                found.append(f"{parts[0]} (pid {parts[1]})")
+    return found
+
+
+def _list_unix(names: list[str], exclude: set[int]) -> list[str]:
+    found: list[str] = []
+    seen: set[int] = set()
+    for name in names:
+        for pid in _pgrep(name):
+            if pid in exclude or pid in seen:
+                continue
+            seen.add(pid)
+            found.append(f"{name} (pid {pid})")
+    return found
+
+
+def list_matching(target: str) -> list[str]:
+    """Human-readable list of the processes a kill would hit right now."""
+    exclude = _self_and_parent()
+    if platform.system() == "Windows":
+        if target == "all":
+            images = WINDOWS_PYTHON_IMAGES + WINDOWS_VSCODE_IMAGES
+        else:
+            images = [target if target.lower().endswith(".exe") else f"{target}.exe"]
+        return _list_windows(images, exclude)
+    names = (PYTHON_PROCESS_NAMES_UNIX + VSCODE_PROCESS_NAMES_UNIX
+             if target == "all" else [target])
+    return _list_unix(names, exclude)
+
+
 def kill_python_and_vscode() -> list:
     """Force-closes every Python/VS Code process, sparing seedling's own.
     Shared by `seed kill-processes all` and `seed remove-user` (which uses
@@ -108,13 +151,24 @@ def run(args) -> int:
         names_windows = [image]
         description = f"all '{target}' processes"
 
-    if not getattr(args, "yes", False):
-        print(f"This force-closes {description} on this machine -- not just "
-              "seedling's -- including any unsaved work.")
-        answer = input("Type 'yes' to confirm: ").strip().lower()
-        if answer != "yes":
-            print("Aborted.")
-            return 1
+    if confirm.preview_requested(args):
+        confirm.print_preview(
+            f"force-close {description}",
+            list_matching(target),
+            notes=["processes are listed as of right now; a real run "
+                   "re-matches at execution time"],
+        )
+        return 0
+
+    if not confirm.auto_confirmed(args):
+        print()
+        print(colors.warn(f"This force-closes {description} on this machine") + " --")
+        print("not just seedling's -- including any unsaved work.")
+        print()
+    if not confirm.confirm(args):
+        print("Aborted.")
+        return 1
+    print()
 
     system = platform.system()
 
@@ -122,9 +176,9 @@ def run(args) -> int:
     if target == "all":
         killed = kill_python_and_vscode()
         if system == "Windows":
-            print(f"Closed: {', '.join(killed)}" if killed else "Nothing matching was running.")
+            print(colors.ok(f"Closed: {', '.join(killed)}") if killed else "Nothing matching was running.")
         else:
-            print(f"Killed {len(killed)} process(es): {', '.join(str(p) for p in killed)}"
+            print(colors.ok(f"Killed {len(killed)} process(es): {', '.join(str(p) for p in killed)}")
                   if killed else "Nothing matching was running.")
         return 0
 
@@ -132,13 +186,13 @@ def run(args) -> int:
     if system == "Windows":
         killed = _kill_windows(names_windows, exclude)
         if killed:
-            print(f"Closed: {', '.join(killed)}")
+            print(colors.ok(f"Closed: {', '.join(killed)}"))
         else:
             print("Nothing matching was running.")
     else:
         killed = _kill_unix(names_unix, exclude)
         if killed:
-            print(f"Killed {len(killed)} process(es): {', '.join(str(p) for p in killed)}")
+            print(colors.ok(f"Killed {len(killed)} process(es): {', '.join(str(p) for p in killed)}"))
         else:
             print("Nothing matching was running.")
 

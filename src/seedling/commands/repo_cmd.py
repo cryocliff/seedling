@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 
-from .. import paths, uv_tool
+from .. import confirm, paths, uv_tool, git_tool, fsutil
 from . import kill_cmd, vscode_cmd
 
 
@@ -25,8 +25,10 @@ def clone(args) -> int:
         print("Usage: seed clone-repo <git-url>")
         return 1
 
-    if shutil.which("git") is None:
-        print("git is required for `seed clone-repo`, but wasn't found on PATH.")
+    try:
+        git = git_tool.ensure_git()
+    except git_tool.GitNotFound as e:
+        print(f"error: {e}")
         return 1
 
     name = _derive_name(url)
@@ -38,8 +40,8 @@ def clone(args) -> int:
 
     paths.REPO_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Cloning {url} -> {target} ...")
-    result = subprocess.run(["git", "clone", url, str(target)])
-    if result.returncode != 0:
+    returncode = git_tool.run_streamed([git, "clone", url, str(target)])
+    if returncode != 0:
         print("git clone failed.")
         return 1
 
@@ -59,13 +61,13 @@ def list_repos(args) -> int:
         print("No repos cloned yet. Run: seed clone-repo <git-url>")
         return 0
 
-    have_git = shutil.which("git") is not None
+    git = git_tool.find_git()  # best-effort only here; don't auto-download just to list
     print(f"Repos in {paths.REPO_DIR}:")
     for r in repos:
         remote = ""
-        if have_git and (r / ".git").exists():
+        if git and (r / ".git").exists():
             result = subprocess.run(
-                ["git", "-C", str(r), "remote", "get-url", "origin"],
+                [git, "-C", str(r), "remote", "get-url", "origin"],
                 capture_output=True, text=True,
             )
             remote = result.stdout.strip()
@@ -85,21 +87,34 @@ def remove(args) -> int:
         print(f"No repo named '{name}' found in {paths.REPO_DIR}")
         return 1
 
-    if not getattr(args, "yes", False):
-        answer = input(
-            f"Delete repo '{name}' at {target}? This will also force-close "
-            "any running Python/VS Code processes first (not just "
-            "seedling's). Type 'yes' to confirm: "
-        ).strip().lower()
-        if answer != "yes":
-            print("Aborted. Nothing was deleted.")
-            return 1
+    if confirm.preview_requested(args):
+        confirm.print_preview(
+            f"delete repo '{name}'",
+            [str(target)],
+            notes=["any running Python/VS Code processes will be force-closed "
+                   "first (not just seedling's) so nothing blocks deletion"],
+        )
+        return 0
+
+    if not confirm.confirm(
+        args,
+        f"Delete repo '{name}' at {target}? This will also force-close "
+        "any running Python/VS Code processes first (not just seedling's).",
+    ):
+        print("Aborted. Nothing was deleted.")
+        return 1
 
     print("Closing Python and VS Code processes so nothing is left in use...")
     killed = kill_cmd.kill_python_and_vscode()
     print(f"Closed {len(killed)} process(es)." if killed else "Nothing matching was running.")
 
-    shutil.rmtree(target, ignore_errors=True)
+    failures = fsutil.robust_rmtree(target)
+    if failures:
+        print(f"Some files in repo '{name}' could not be removed after several attempts:")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+
     print(f"Deleted repo '{name}'.")
     return 0
 

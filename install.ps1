@@ -4,18 +4,18 @@
 # Usage (from a local checkout of this repo):
 #   .\install.ps1
 #
-# Usage (remote, once hosted):
-#   irm https://.../install.ps1 | iex
-#   $env:SEEDLING_REPO = "https://github.com/you/seedling.git"; irm .../install.ps1 | iex
+# Usage (remote):
+#   irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex
+#   $env:SEEDLING_REPO = "https://github.com/someone/fork.git"; irm .../install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
-# Change this once you've pushed seedling to your own GitHub repo, then host
-# this script's raw URL so people can install with a single line, same as uv:
-#   irm https://raw.githubusercontent.com/<you>/seedling/main/install.ps1 | iex
-# Can also be overridden per-run without editing the file:
-#   $env:SEEDLING_REPO = "https://github.com/someone/fork.git"; irm .../install.ps1 | iex
-$DefaultSeedlingRepo = "https://github.com/CHANGE_ME/seedling.git"
+# Where seedling is cloned from when this script isn't run from inside a
+# local checkout. Can be overridden per-run without editing the file --
+# SEEDLING_REPO accepts a git URL or a plain directory path:
+#   $env:SEEDLING_REPO = "https://github.com/someone/fork.git"; .\install.ps1
+#   $env:SEEDLING_REPO = "S:\shared\seedling"; .\install.ps1
+$DefaultSeedlingRepo = "https://github.com/cryocliff/seedling.git"
 
 $SeedlingHome = if ($env:SEEDLING_HOME) { $env:SEEDLING_HOME } else { Join-Path $HOME "seedling" }
 $SeedlingRepo = if ($env:SEEDLING_REPO) { $env:SEEDLING_REPO } else { $DefaultSeedlingRepo }
@@ -27,15 +27,32 @@ function Die($msg)   { Write-Host "error: $msg" -ForegroundColor Red; exit 1 }
 # ---------------------------------------------------------------------------
 # 1. Locate the seedling source (local checkout next to this script, or clone)
 # ---------------------------------------------------------------------------
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# $MyInvocation.MyCommand.Path is $null when this script is run via
+# `irm ... | iex` (there's no backing file for a piped-in script), so guard
+# against that instead of calling Split-Path on a null value.
+$ScriptPath = $MyInvocation.MyCommand.Path
+$ScriptDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { $null }
 
-if (Test-Path (Join-Path $ScriptDir "pyproject.toml")) {
+$HasLocalCheckout = $false
+if ($ScriptDir) {
+    if (Test-Path (Join-Path $ScriptDir "pyproject.toml")) {
+        $HasLocalCheckout = $true
+    }
+}
+
+$InstalledFromDir = $null
+if ($HasLocalCheckout) {
     $OriginalSrc = $ScriptDir
     $CleanupOriginalSrc = $false
+} elseif ((Test-Path $SeedlingRepo -PathType Container) -and (Test-Path (Join-Path $SeedlingRepo "pyproject.toml"))) {
+    # SEEDLING_REPO can be a plain directory instead of a git URL -- e.g. a
+    # network drive holding a copy of this repo, on machines/networks with
+    # no GitHub access at all.
+    Info "Installing from directory $SeedlingRepo ..."
+    $OriginalSrc = $SeedlingRepo
+    $CleanupOriginalSrc = $false
+    $InstalledFromDir = $SeedlingRepo
 } else {
-    if ($SeedlingRepo -like "*CHANGE_ME*") {
-        Die "No local pyproject.toml found next to this script, and no repo is configured. Either run this from inside a seedling checkout, set `$env:SEEDLING_REPO, or edit `$DefaultSeedlingRepo at the top of install.ps1 once you've pushed this to GitHub."
-    }
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die "git is required to clone $SeedlingRepo." }
     $OriginalSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("seedling-src-" + [System.Guid]::NewGuid())
     $CleanupOriginalSrc = $true
@@ -70,6 +87,13 @@ Copy-Item -Recurse -Force $OriginalSrc $SrcDir
 
 if ($CleanupOriginalSrc) {
     Remove-Item -Recurse -Force $OriginalSrc -ErrorAction SilentlyContinue
+}
+
+# When installing from a directory, remember it as the update source so
+# `seed update-commands` knows where to look for newer copies later.
+$SettingsFile = Join-Path $SeedlingHome "system\config\settings.json"
+if ($InstalledFromDir -and -not (Test-Path $SettingsFile)) {
+    @{ update_source = "$InstalledFromDir" } | ConvertTo-Json | Set-Content -Path $SettingsFile -Encoding UTF8
 }
 
 

@@ -13,11 +13,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import paths
+from . import colors, paths
 
 
 class UvNotFound(RuntimeError):
     pass
+
+
+def tag_line(line: str) -> str:
+    """Prefix a line of uv's own output so it's never mistaken for a message
+    seedling printed itself. Blank lines pass through untouched."""
+    if not line.strip():
+        return line
+    return f"{colors.dim('[uv]')} {line}"
 
 
 def find_uv() -> Path:
@@ -33,17 +41,47 @@ def find_uv() -> Path:
     raise UvNotFound(
         "uv was not found in ~/seedling/bin or on PATH.\n"
         "Re-run the seedling installer:\n"
-        "  bash:       curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash\n"
-        "  powershell: irm https://raw.githubusercontent.com/.../install.ps1 | iex"
+        "  bash:       curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh\n"
+        "  powershell: irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex"
     )
 
 
 def run(args: list[str], *, env: dict | None = None, check: bool = True) -> subprocess.CompletedProcess:
+    """Runs uv, streaming its combined stdout/stderr live with a `[uv]` tag
+    on every line so it reads distinctly from seedling's own print()s."""
     uv = find_uv()
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
-    return subprocess.run([str(uv), *args], env=full_env, check=check)
+    cmd = [str(uv), *args]
+    proc = subprocess.Popen(
+        cmd, env=full_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1,
+    )
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        sys.stdout.write(tag_line(line))
+    proc.wait()
+    if check and proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
+    return subprocess.CompletedProcess(cmd, proc.returncode)
+
+
+def run_captured(args: list[str], *, env: dict | None = None, check: bool = True) -> subprocess.CompletedProcess:
+    """Like run(), but captures stdout/stderr instead of streaming them
+    live, so the caller can filter/inspect output before deciding what (if
+    anything) to print. Used where uv's own messaging would be redundant or
+    misleading given seedling's own folder conventions -- e.g. uv's
+    "activate with: source .../activate" hint after `uv venv`, which doesn't
+    match how `seed activate` actually works."""
+    uv = find_uv()
+    full_env = os.environ.copy()
+    if env:
+        full_env.update(env)
+    return subprocess.run(
+        [str(uv), *args], env=full_env, check=check,
+        capture_output=True, text=True,
+    )
 
 
 def python_install_dir_env() -> dict:

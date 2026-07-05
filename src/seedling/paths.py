@@ -11,6 +11,8 @@ scattered across the filesystem:
         src/              <- seedling's own source (see `seed update-commands`)
         config/
             settings.json <- seedling's own config (default python version, etc.)
+        logs/             <- one log file per day; every `seed` command appends
+                             what ran and everything it printed
         shell/
             seed.sh       <- sourced by bash/zsh to define the `seed` function
             seed.ps1      <- dot-sourced by PowerShell to define the `seed` function
@@ -52,6 +54,7 @@ SRC_DIR = SYSTEM_DIR / "src"
 CONFIG_DIR = SYSTEM_DIR / "config"
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 SHELL_DIR = SYSTEM_DIR / "shell"
+LOGS_DIR = SYSTEM_DIR / "logs"
 
 PYTHON_DIR = HOME / "python"
 BASE_DIR = PYTHON_DIR / "base"
@@ -71,6 +74,7 @@ ALL_DIRS = [
     BIN_DIR,
     CONFIG_DIR,
     SHELL_DIR,
+    LOGS_DIR,
     PYTHON_DIR,
     BASE_DIR,
     VENVS_DIR,

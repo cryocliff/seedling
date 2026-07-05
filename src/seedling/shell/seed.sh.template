@@ -20,7 +20,7 @@ seed() {
         fi
         # shellcheck disable=SC1090
         source "$script"
-        echo "Activated: $1"
+        echo "Activated${1:+: $1}"
         return 0
     fi
 
@@ -35,3 +35,16 @@ seed() {
 
     "$__SEEDLING_CLI" "$@"
 }
+
+# Auto-activate the configured default venv in every new shell
+# (set one with: seed config set default_venv <name>). Skipped when some
+# venv is already active. SEEDLING_NO_LOG keeps this startup query from
+# spamming seedling's command log on every shell launch.
+if [ -z "$VIRTUAL_ENV" ]; then
+    __seedling_default_venv="$(SEEDLING_NO_LOG=1 "$__SEEDLING_CLI" config get default_venv 2>/dev/null)"
+    if [ -n "$__seedling_default_venv" ]; then
+        seed activate "$__seedling_default_venv" >/dev/null 2>&1 \
+            || echo "seedling: couldn't auto-activate default venv '$__seedling_default_venv'"
+    fi
+    unset __seedling_default_venv
+fi

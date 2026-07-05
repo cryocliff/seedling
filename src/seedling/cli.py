@@ -4,9 +4,10 @@ import argparse
 import subprocess
 import sys
 
-from . import paths
+from . import colors, paths, runlog
 from .commands import (
     activate_cmd,
+    config_cmd,
     deactivate_cmd,
     install_cmd,
     kill_cmd,
@@ -16,6 +17,8 @@ from .commands import (
     python_remove_cmd,
     remove_cmd,
     repo_cmd,
+    status_cmd,
+    summary_cmd,
     uninstall_cmd,
     update_cmd,
     venv_cmd,
@@ -23,6 +26,64 @@ from .commands import (
     vscode_cmd,
 )
 from .uv_tool import UvNotFound
+
+# (command, args-hint, description) -- grouped for the custom help layout.
+# argparse's own auto-generated help lists every subcommand as one flat,
+# alphabetized block, which stops being readable somewhere around a dozen
+# commands. This groups them the way a person actually thinks about them.
+_HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
+    ("Python & venvs", [
+        ("python", "<version>", "Install a base Python interpreter"),
+        ("list-python", "", "List installed base Python interpreters"),
+        ("venv", "<name> [--python <tag>]", "Create a venv from a base Python"),
+        ("list-venvs", "", "List venvs, and which one is active"),
+        ("activate", "<name>", "Activate a venv in this shell"),
+        ("deactivate", "", "Deactivate the current venv"),
+        ("install", "<package...>", "Install packages (uv pip install)"),
+        ("uninstall", "<package...>", "Uninstall packages (uv pip uninstall)"),
+        ("list-packages", "", "List installed packages (uv pip list)"),
+    ]),
+    ("Git repos", [
+        ("clone-repo", "<git-url>", "Clone a repo into ~/seedling/repo"),
+        ("list-repos", "", "List cloned repos"),
+        ("open-repo", "<name>", "Open a repo in VS Code"),
+        ("install-repo", "<name>", "Install a repo's dependencies into the active venv"),
+    ]),
+    ("VS Code", [
+        ("vscode", "[path] [--reinstall]", "Install (once) and open VS Code"),
+    ]),
+    ("Utilities", [
+        ("summary", "[--sizes]", "Show everything seedling has installed"),
+        ("status", "", "Health-check the whole seedling install"),
+        ("config", "[get|set|unset]", "View or change seedling settings"),
+        ("kill-processes", "<all|name>", "Force-close python/VS Code (or named) processes"),
+        ("update-commands", "", "Update the seed CLI itself"),
+        ("where", "", "Print the seedling home directory"),
+    ]),
+    ("Danger zone -- these delete things (all support --preview)", [
+        ("remove-repo", "<name>", "Delete a cloned repo"),
+        ("remove-venv", "<name>", "Delete a single venv"),
+        ("remove-venvs", "", "Delete every venv"),
+        ("remove-python", "<tag>", "Delete a base Python and its venvs"),
+        ("remove-user", "", "Delete everything seedling manages"),
+        ("purge", "", "Full uninstall (also removes the shell hook)"),
+    ]),
+]
+
+
+def print_grouped_help() -> None:
+    print(colors.bold("seed") + " -- a tidy, single-folder wrapper around uv")
+    print()
+    print("Usage: seed <command> [arguments]")
+    print()
+    for title, commands in _HELP_GROUPS:
+        heading = colors.danger(title) if "Danger" in title else colors.header(title)
+        print(heading)
+        for name, args_hint, desc in commands:
+            left = f"  {name} {args_hint}".rstrip()
+            print(f"{left:<32} {colors.dim(desc)}")
+        print()
+    print("Run any command with -h for its full options, e.g. `seed venv -h`.")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,20 +94,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command")
 
+    # Flags shared by every destructive command.
+    danger = argparse.ArgumentParser(add_help=False)
+    danger.add_argument("-y", "--yes", action="store_true",
+                        help="Skip the confirmation prompt")
+    danger.add_argument("--preview", action="store_true",
+                        help="Show exactly what would be deleted/closed, "
+                             "then exit without changing anything")
+    danger.add_argument("--non-interactive", dest="non_interactive",
+                        action="store_true",
+                        help="Never wait for keyboard input: abort instead "
+                             "of prompting (combine with -y to proceed). "
+                             "SEEDLING_NONINTERACTIVE=1 does the same.")
+
     p_python = sub.add_parser("python", help="Install a base Python version")
     p_python.add_argument("version", nargs="?", help="e.g. 312, 3.12, 3.12.4")
 
     p_remove_python = sub.add_parser(
-        "remove-python", help="Remove a base Python and any venvs built from it")
+        "remove-python", parents=[danger],
+        help="Remove a base Python and any venvs built from it")
     p_remove_python.add_argument("tag", nargs="?", help="e.g. 312")
-    p_remove_python.add_argument("-y", "--yes", action="store_true",
-                                  help="Skip the confirmation prompt")
 
     p_venv = sub.add_parser("venv", help="Create a venv from a base Python")
     p_venv.add_argument("name", nargs="?", help="Name of the venv to create")
     p_venv.add_argument("--python", dest="python", default=None,
                          help="Base python tag to build from (defaults to "
                               "the first one installed)")
+    p_venv.add_argument("--no-default-packages", "--bare",
+                         dest="no_default_packages", action="store_true",
+                         help="Don't install the default packages "
+                              "(see `seed config get venv_default_packages`)")
 
     sub.add_parser("list-venvs", help="List every venv seedling has created")
     sub.add_parser("list-python", help="List every base Python interpreter installed")
@@ -84,10 +161,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list-repos", help="List every repo cloned with `seed clone-repo`")
 
-    p_remove_repo = sub.add_parser("remove-repo", help="Delete a cloned repo")
+    p_remove_repo = sub.add_parser("remove-repo", parents=[danger],
+                                   help="Delete a cloned repo")
     p_remove_repo.add_argument("name", nargs="?", help="Name of the repo to delete")
-    p_remove_repo.add_argument("-y", "--yes", action="store_true",
-                                help="Skip the confirmation prompt")
 
     p_open_repo = sub.add_parser("open-repo", help="Open a cloned repo in VS Code")
     p_open_repo.add_argument("name", nargs="?", help="Name of the repo to open")
@@ -97,41 +173,82 @@ def build_parser() -> argparse.ArgumentParser:
         help="Install a cloned repo's dependencies into the active venv")
     p_install_repo.add_argument("name", nargs="?", help="Name of the repo to install")
 
-    p_remove = sub.add_parser("remove-user", help="Delete everything seedling manages")
-    p_remove.add_argument("-y", "--yes", action="store_true",
-                          help="Skip the confirmation prompt")
+    p_remove = sub.add_parser("remove-user", parents=[danger],
+                              help="Delete everything seedling manages")
 
-    p_remove_venvs = sub.add_parser("remove-venvs", help="Delete every venv seedling has created")
-    p_remove_venvs.add_argument("-y", "--yes", action="store_true",
-                                help="Skip the confirmation prompt")
+    sub.add_parser("remove-venvs", parents=[danger],
+                   help="Delete every venv seedling has created")
 
-    p_remove_venv = sub.add_parser("remove-venv", help="Delete a single venv")
+    p_remove_venv = sub.add_parser("remove-venv", parents=[danger],
+                                   help="Delete a single venv")
     p_remove_venv.add_argument("name", nargs="?", help="Name of the venv to delete")
-    p_remove_venv.add_argument("-y", "--yes", action="store_true",
-                               help="Skip the confirmation prompt")
 
     p_purge = sub.add_parser(
-        "purge", help="Fully uninstall seedling: delete everything AND remove the shell hook")
-    p_purge.add_argument("-y", "--yes", action="store_true",
-                          help="Skip the confirmation prompt")
+        "purge", parents=[danger],
+        help="Fully uninstall seedling: delete everything AND remove the shell hook")
+    p_purge.add_argument("--keep-repos", action="store_true",
+                          help="Move ~/seedling/repo out to safety before deleting everything else")
 
     p_kill = sub.add_parser(
-        "kill-processes", help="Force-close processes by name, or 'all' for python + VS Code")
+        "kill-processes", parents=[danger],
+        help="Force-close processes by name, or 'all' for python + VS Code")
     p_kill.add_argument("target", nargs="?",
                          help="'all' for python/VS Code processes, or a specific process name")
-    p_kill.add_argument("-y", "--yes", action="store_true",
-                         help="Skip the confirmation prompt")
 
     sub.add_parser("update-commands",
                     help="Update the seed CLI itself from its source in ~/seedling/system/src")
 
     sub.add_parser("where", help="Print the seedling home directory")
 
+    p_summary = sub.add_parser(
+        "summary", help="Show everything seedling has installed, on one screen")
+    p_summary.add_argument("--sizes", action="store_true",
+                            help="Also compute disk usage per item (slower)")
+
+    sub.add_parser("status", help="Health-check the whole seedling install")
+
+    p_config = sub.add_parser("config", help="View or change seedling settings")
+    config_sub = p_config.add_subparsers(dest="action")
+    p_cfg_get = config_sub.add_parser("get", help="Print one setting's value")
+    p_cfg_get.add_argument("key")
+    p_cfg_set = config_sub.add_parser("set", help="Change a setting")
+    p_cfg_set.add_argument("key")
+    p_cfg_set.add_argument("value",
+                            help="New value (lists take comma-separated input)")
+    p_cfg_unset = config_sub.add_parser("unset", help="Reset a setting to its default")
+    p_cfg_unset.add_argument("key")
+
     return parser
 
 
 def main(argv=None) -> int:
+    """Thin wrapper so every invocation -- including argparse usage errors
+    and Ctrl-C -- gets its command line, output, and exit code logged."""
     argv = argv if argv is not None else sys.argv[1:]
+    runlog.start(argv)
+    try:
+        code = _dispatch_main(argv)
+    except SystemExit as e:  # argparse --help / usage errors
+        runlog.finish(e.code if isinstance(e.code, int) else 0)
+        raise
+    except BaseException:
+        runlog.finish(1)
+        raise
+    runlog.finish(code)
+    return code
+
+
+def _dispatch_main(argv: list[str]) -> int:
+    # Show the custom grouped help for a bare `seed`, `seed -h`, or
+    # `seed --help` -- argparse's own auto-generated help (which would
+    # otherwise fire for -h/--help before we get a chance to intercept it)
+    # lists every subcommand as one flat block, which stops being readable
+    # somewhere around a dozen commands. Subcommand-specific help, e.g.
+    # `seed venv -h`, is untouched and still uses argparse's normal output.
+    if not argv or argv[0] in ("-h", "--help"):
+        print_grouped_help()
+        return 0
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -160,6 +277,9 @@ def main(argv=None) -> int:
         "purge": purge_cmd.run,
         "kill-processes": kill_cmd.run,
         "update-commands": update_cmd.run,
+        "summary": summary_cmd.run,
+        "status": status_cmd.run,
+        "config": config_cmd.run,
     }
 
     if args.command == "where":
@@ -168,7 +288,7 @@ def main(argv=None) -> int:
 
     handler = dispatch.get(args.command)
     if handler is None:
-        parser.print_help()
+        print_grouped_help()
         return 0 if args.command is None else 1
 
     try:

@@ -16,6 +16,11 @@ For a shorter quickstart, see [README.md](README.md).
 - [How installation works](#how-installation-works)
 - [The folder layout](#the-folder-layout)
 - [Why `seed` is a shell function](#why-seed-is-a-shell-function)
+- [Why deletion sometimes used to fail](#why-deletion-sometimes-used-to-fail)
+- [Help output & color](#help-output--color)
+- [Command logging](#command-logging)
+- [Non-interactive mode & previews](#non-interactive-mode--previews)
+- [Download verification](#download-verification)
 - [Command reference](#command-reference)
 - [The update model](#the-update-model)
 - [Uninstalling](#uninstalling)
@@ -26,22 +31,25 @@ For a shorter quickstart, see [README.md](README.md).
 
 ## How installation works
 
-Nothing needs to be pre-installed — not Python, not uv, not git (unless
-you're installing from a repo rather than a local checkout, or using
-`seed clone-repo` later, which does need git on PATH).
+Nothing needs to be pre-installed to install seedling itself — not Python,
+not uv, not git (git is only needed if you install from a GitHub repo
+rather than a local checkout; see below). Separately, `seed clone-repo`
+(a feature *of* seedling, used after it's installed) needs git to work —
+on Windows, seedling downloads a portable copy automatically if none is
+found; see [`seed clone-repo`](#seed-clone-repo-git-url) for details.
 
-### One-line install (once published to GitHub)
+### One-line install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/<you>/seedling/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh
 ```
 ```powershell
-irm https://raw.githubusercontent.com/<you>/seedling/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex
 ```
 
-This only works after the repo owner has pushed this project to GitHub and
-set `DEFAULT_SEEDLING_REPO` (bash) / `$DefaultSeedlingRepo` (PowerShell) near
-the top of `install.sh` / `install.ps1` to point at it.
+By default the installers clone from
+`https://github.com/cryocliff/seedling.git` (the `DEFAULT_SEEDLING_REPO` /
+`$DefaultSeedlingRepo` value near the top of `install.sh` / `install.ps1`).
 
 ### Local checkout install
 
@@ -51,13 +59,21 @@ the installer from inside it:
 - **macOS/Linux:** `./install.sh`
 - **Windows:** `install.cmd` (double-clicking it also works)
 
-### Installing from a different repo, for one run
+### Installing from a different source, for one run
+
+`SEEDLING_REPO` accepts a git URL (a fork, or a self-hosted GitHub/GitLab
+on another network) or a plain directory path (e.g. a network drive
+holding a copy of this repo — no git hosting needed at all). When it's a
+directory, the installer records it as the `update_source` setting so
+`seed update-commands` keeps working from it too.
 
 ```sh
 SEEDLING_REPO=https://github.com/someone/fork.git ./install.sh
+SEEDLING_REPO=/mnt/share/seedling ./install.sh
 ```
 ```powershell
 $env:SEEDLING_REPO = "https://github.com/someone/fork.git"; .\install.ps1
+$env:SEEDLING_REPO = "S:\shared\seedling"; .\install.ps1
 ```
 
 ### What the installer actually does, step by step
@@ -115,7 +131,9 @@ it:
 │   ├── tool/                     the isolated uv-managed venv seed-cli runs in
 │   ├── src/                      seedling's own source -- see "update model"
 │   ├── config/
-│   │   └── settings.json         seedling's own tiny config (default base, etc.)
+│   │   └── settings.json         seedling's own config -- see `seed config`
+│   ├── logs/
+│   │   └── seed-YYYY-MM-DD.log   every command + its output, one file per day
 │   └── shell/
 │       ├── seed.sh                sourced by bash/zsh
 │       └── seed.ps1                dot-sourced by PowerShell
@@ -171,6 +189,105 @@ If you invoke `seed-cli activate <name>` or `seed-cli deactivate` directly
 (bypassing the shell function — e.g. by calling the binary path explicitly),
 you'll get a message explaining that this only works through the `seed`
 shell function, since a subprocess has no way to affect your shell.
+
+---
+
+## Why deletion sometimes used to fail
+
+Every command that deletes a directory (`remove-venv(s)`, `remove-python`,
+`remove-repo`, `remove-user`, `purge`) routes through a shared helper
+(`robust_rmtree`) that works around two real causes of "file in use" /
+permission-denied failures, rather than the older behavior of just calling
+`shutil.rmtree(path, ignore_errors=True)` and hoping:
+
+1. **The calling process's own working directory being inside the folder
+   being deleted.** Windows refuses to delete a directory that is any
+   running process's cwd — including `seed-cli` itself. This is easy to hit
+   in practice: activate a venv, `cd` into its project directory (or the
+   venv folder itself), then run a remove/purge command from right there.
+   The fix moves the process out to the user's home directory first, if
+   its cwd is inside (or is) the target.
+2. **A process that was just force-killed** (every delete command closes
+   Python/VS Code processes first, see `seed kill-processes`) not having
+   released its file handles instantly. The fix retries deletion a few
+   times with a short delay instead of failing on the first pass.
+
+If a file is genuinely still stuck after all retries, you get its exact
+path printed, instead of a vague "something might be in use" message.
+
+---
+
+## Help output & color
+
+`seed` (no arguments) or `seed -h`/`--help` shows commands grouped into
+Python & venvs / Git repos / VS Code / Utilities / a "danger zone" for
+everything destructive — rather than argparse's default flat, alphabetized
+list, which stops being easy to scan once there are more than a handful of
+commands. Subcommand-specific help (`seed venv -h`, etc.) is unaffected and
+still uses argparse's normal per-command output.
+
+Color (used for headers, warnings, and success messages) is automatically
+disabled when stdout isn't a real terminal — piped output, redirected to a
+file, CI logs — or when the `NO_COLOR` environment variable is set (per
+[no-color.org](https://no-color.org)), so scripting against seedling's
+output never has to deal with stray ANSI escape codes. On Windows, seedling
+enables virtual terminal processing itself rather than requiring it be
+turned on beforehand.
+
+Output from the tools seedling drives is attributed in the terminal: lines
+coming from uv are prefixed `[uv]`, and lines from git are prefixed
+`[git]`, so it's always clear whether a message came from seedling itself
+or from the tool underneath.
+
+---
+
+## Command logging
+
+Every `seed` invocation appends to a daily log file under
+`~/seedling/system/logs/` (e.g. `seed-2026-07-05.log`):
+
+- the exact command line and a timestamp,
+- everything the command printed — stdout *and* stderr, including the
+  tagged `[uv]`/`[git]` output — with ANSI color codes stripped,
+- and the exit code.
+
+Log files older than 30 days are pruned automatically. Logging never
+interferes with the command itself: if the log file can't be written, the
+command carries on unlogged. Set `SEEDLING_NO_LOG=1` to disable logging for
+a given call (the shell integration uses this itself for its startup
+`default_venv` query, so opening a terminal doesn't spam the log).
+
+---
+
+## Non-interactive mode & previews
+
+Every destructive command (`remove-python`, `remove-venv`, `remove-venvs`,
+`remove-repo`, `remove-user`, `purge`, `kill-processes`) supports three
+shared flags:
+
+- `-y` / `--yes` — skip the confirmation prompt and proceed.
+  (`SEEDLING_YES=1` is the environment equivalent.)
+- `--preview` — print exactly what would be deleted (full paths; for
+  `kill-processes`, the actual matching processes running right now), then
+  exit without changing anything.
+- `--non-interactive` — never wait for keyboard input. Anything that would
+  have prompted aborts safely instead, unless `-y` was also given.
+  (`SEEDLING_NONINTERACTIVE=1` is the environment equivalent.) This is the
+  mode for scripts and CI, where a forgotten prompt would otherwise hang
+  the job forever.
+
+---
+
+## Download verification
+
+The two things seedling downloads itself as plain archives — portable
+MinGit on Windows and VS Code — are verified against their publishers'
+SHA-256 checksums before extraction (GitHub's release-asset digest for
+MinGit; VS Code's update API hash for VS Code). A checksum mismatch deletes
+the download and aborts with an explanation. If no checksum could be
+obtained (e.g. the metadata endpoint is blocked on your network), the
+download proceeds but says so explicitly. uv and Python interpreters are
+installed by uv's own tooling, which does its own verification.
 
 ---
 
@@ -231,16 +348,27 @@ cascades rather than leaving them broken.
 seed remove-python 311
 ```
 
-### `seed venv <name> [--python <tag>]`
+### `seed venv <name> [--python <tag>] [--no-default-packages]`
 
 Creates a virtual environment at `~/seedling/python/venvs/<name>` via
-`uv venv --python <interpreter>`.
+`uv venv --python <interpreter>`, then installs the default packages
+(`ipython` and `ruff`, unless changed via
+`seed config set venv_default_packages ...`) into it.
 
 - `--python <tag>` selects which installed base Python to build from
   (matching a tag from `seed python`). If omitted, uses the default base
   (the first one installed).
+- `--no-default-packages` (alias `--bare`) skips the default package
+  install for just this venv. If the package install fails (e.g. offline),
+  the venv itself is still created and usable.
 - Fails with a clear message if the requested base isn't installed, or if
   a venv with that name already exists.
+- uv's own output is shown as-is (interpreter resolution, creation
+  confirmation) *except* for its "activate with: source .../activate" hint,
+  which is filtered out -- that's not how `seed activate` actually works
+  (it's a shell function, not a sourced script path), so showing it would
+  just be confusing. seedling prints its own `seed activate <name>`
+  instruction instead.
 
 ```
 seed venv myproject
@@ -337,6 +465,11 @@ everything else, so your shell may be left with a dangling activated
 prompt; run `seed deactivate` afterward. Prompts for confirmation unless
 `-y`/`--yes`.
 
+Deletion itself uses a retrying, defensive helper shared by every
+`remove-*`/`purge` command — see
+[Why deletion sometimes used to fail](#why-deletion-sometimes-used-to-fail)
+for the bug this fixes and how.
+
 ```
 seed remove-venv myproject
 seed remove-venv myproject -y
@@ -408,11 +541,21 @@ seed vscode --reinstall
 
 ### `seed clone-repo <git-url>`
 
-Clones a git repository into `~/seedling/repo/<name>` via a plain
-`git clone`. The repo name is derived from the URL (handles
-`https://host/group/name.git`, SSH-style `git@host:group/name.git`, and
-plain paths). Requires `git` on PATH — this is the one command in seedling
-that isn't self-bootstrapping, since seedling doesn't manage git itself.
+Clones a git repository into `~/seedling/repo/<name>` via `git clone`. The
+repo name is derived from the URL (handles `https://host/group/name.git`,
+SSH-style `git@host:group/name.git`, and plain paths).
+
+**git itself:** on Windows, if no system `git` is found, seedling
+automatically downloads a portable copy ("MinGit", Git for Windows'
+official dependency-free build — no installer, no admin rights) into
+`~/seedling/extensions/git` and uses that. This is the only piece of
+seedling bootstrapped this way, because it's the only platform with a
+genuinely portable official build; on macOS and Linux, git is dynamically
+linked against system libraries, so there's no equivalent to safely bundle.
+There, if git isn't found, you'll get a clear one-line instruction
+(`xcode-select --install`/`brew install git` on macOS; your distro's package
+manager on Linux) instead of a silent failure.
+
 Fails with a clear message (rather than overwriting) if a repo with that
 name already exists — remove it first with `seed remove-repo`.
 
@@ -560,6 +703,26 @@ This is the same end state as running `uninstall.sh` / `uninstall.cmd` /
 the original installer files around. Reports exactly which profile files
 it edited.
 
+**`--keep-repos`** moves `~/seedling/repo` out to a sibling folder
+(`~/seedling-repo-backup`, or `-1`/`-2`/... if that already exists) before
+deleting everything else, so your cloned repos survive the purge. Without
+it, repos are deleted along with everything else — if you have cloned
+repos and didn't pass the flag, the confirmation screen reminds you before
+asking you to type `yes`, but there's a single confirmation gate either
+way (no separate interactive question to answer differently).
+
+Without `--keep-repos`, any leftover `~/seedling-repo-backup*` folder from a
+*previous* `seed purge --keep-repos` is deleted too — the flag means "keep
+repos this time," so leaving it off means you're saying you don't want
+them kept around at all, and stale backups from an earlier purge would
+otherwise just accumulate in your home directory forever.
+
+```
+seed purge
+seed purge --keep-repos
+seed purge -y --keep-repos
+```
+
 ```
 seed purge
 ```
@@ -571,6 +734,68 @@ Prints the seedling home directory (`~/seedling`, or the value of the
 
 ```
 seed where
+```
+
+### `seed summary [--sizes]`
+
+One read-only screen showing everything seedling has installed: uv/git/VS
+Code status, every base Python (and which is default), every venv (its
+Python version, which is active, which auto-activates in new shells),
+every cloned repo with its origin remote, and all current settings.
+`--sizes` also computes disk usage per item and a grand total (it walks
+the whole tree, so it can take a few seconds on big installs).
+
+```
+seed summary
+seed summary --sizes
+```
+
+### `seed status`
+
+The health check. Verifies each moving part and prints one `OK` / `WARN` /
+`FAIL` line per check: uv actually runs, git is available, the config file
+parses, every base Python alias resolves to a real interpreter, every venv
+has its interpreter and its base Python still exists, the configured
+defaults point at things that exist, the `seed` shell hook is installed,
+and the log directory is writable.
+
+`FAIL` means a core operation would not work right now and makes the
+command exit 1 (useful in scripts/CI); `WARN` is informational (nothing
+installed yet, no git, etc.) and doesn't affect the exit code.
+
+```
+seed status
+```
+
+### `seed config [get <key> | set <key> <value> | unset <key>]`
+
+Views and changes seedling's own settings, stored in
+`~/seedling/system/config/settings.json`. Bare `seed config` lists every
+setting with its current value and an explanation. The keys:
+
+- `default_base` — the base Python tag `seed venv` builds from when
+  `--python` isn't given. Set automatically by your first `seed python`.
+- `default_venv` — a venv name that **every new shell auto-activates** on
+  startup. Unset means no auto-activation. (Existing shells are
+  unaffected; open a new terminal to see it.)
+- `update_source` — where `seed update-commands` gets seedling's own
+  source: a git URL (works with self-hosted GitHub/GitLab on isolated
+  networks) *or* a plain directory path (e.g. a network drive holding a
+  copy of the repo, for machines with no git hosting at all). Unset means
+  the git remote the source was originally cloned from.
+- `venv_default_packages` — the packages installed into every new venv
+  (default: `ipython, ruff`). Takes comma-separated input.
+
+`seed config get <key>` prints just the value (nothing at all when unset),
+so it's script-friendly. `unset` resets a key to its built-in default.
+
+```
+seed config
+seed config set default_venv myproject
+seed config set update_source https://github.mycompany.com/tools/seedling.git
+seed config set update_source "S:\shared\seedling"
+seed config set venv_default_packages "ipython,ruff,requests"
+seed config unset default_venv
 ```
 
 ---
@@ -595,6 +820,22 @@ from *that* private copy. Concretely:
 This means re-running the original `curl | sh` one-liner is not how you
 update seedling day-to-day — `seed update-commands` is.
 
+Where `seed update-commands` looks for newer source, in order:
+
+1. the `update_source` setting, if set — a git URL to pull from, or a
+   plain directory to re-copy from (see `seed config`);
+2. otherwise, the git remote `~/seedling/system/src` was originally cloned
+   from (`git pull --ff-only` against origin).
+
+If neither applies (not a git checkout, no `update_source`), it just
+reinstalls from whatever's currently in `~/seedling/system/src`, so it
+doubles as a "repair" command if you've hand-edited something.
+
+The installers accept the same flexibility up front: `SEEDLING_REPO` may
+be a git URL *or* a directory containing a copy of this repo. When it's a
+directory, the installer copies from it and records it as `update_source`
+automatically, so machines on networks without github.com stay updatable.
+
 ---
 
 ## Uninstalling
@@ -615,6 +856,15 @@ update seedling day-to-day — `seed update-commands` is.
 **"is not digitally signed. You cannot run this script on the current
 system"** — see [Windows execution policy](#windows-execution-policy).
 
+**`iex : Cannot bind argument to parameter 'Path' because it is null`**
+when running the `irm ... | iex` one-liner — this was a real bug (fixed):
+`install.ps1` used `$MyInvocation.MyCommand.Path` to detect a local
+checkout, which is `$null` when the script has no backing file (exactly
+the case for anything piped into `iex`), and `Split-Path` throws on a null
+argument rather than returning something falsy. `install.ps1` now guards
+against this explicitly, so this shouldn't happen anymore — if it does,
+you're running a stale cached copy of the script rather than a current one.
+
 **`seed: command not found` after installing** — open a new terminal (the
 shell hook only takes effect in new shells), or manually run
 `. ~/seedling/system/shell/seed.sh` (bash/zsh) /
@@ -631,9 +881,13 @@ all` (or targeting a specific process name) force-closes it, after
 confirmation. Every `remove-*` command and `seed purge` also do this
 automatically before deleting anything.
 
-**`git is required for 'seed clone-repo'`** — install git through your OS's
-normal package manager; unlike everything else in seedling, this one
-command needs it on PATH, since seedling doesn't manage git itself.
+**`git isn't installed, and seedling can't bundle a portable copy on
+<macOS/Linux>`** — install git through your OS's package manager (the error
+message tells you the exact command for your platform) and try again. On
+Windows this shouldn't happen — seedling downloads a portable copy
+automatically — but if it does (e.g. GitHub API rate-limiting), the error
+message includes a manual download link and the exact folder to extract it
+into.
 
 **`seed vscode` repeatedly opens new windows and/or floods the terminal with
 VS Code logs, and extensions never actually get installed** — this was a
@@ -653,8 +907,9 @@ run `seed update-commands` to pick up the fix, then `seed vscode --reinstall`.
   other implementations aren't wired up.
 - `seed kill-processes` (and everything that reuses it) is machine-wide,
   not seedling-scoped, by design — see the command reference above.
-- `seed clone-repo`/`install-repo` require `git` on PATH; this is the one
-  place seedling doesn't fully self-bootstrap.
+- `seed clone-repo`/`install-repo` need git; only Windows is auto-bootstrapped
+  (via portable MinGit) — macOS/Linux still need system git already present,
+  since neither has an equivalent official portable build.
 - `seed install-repo` only recognizes `pyproject.toml` and
   `requirements.txt` — repos using other dependency files (e.g. Poetry's
   `poetry.lock` without a PEP 621 `pyproject.toml` section, or Pipenv) may

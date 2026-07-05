@@ -10,11 +10,14 @@ from inside `seed` itself.
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
-from .. import paths
+from .. import colors, confirm, fsutil, paths, runlog
 from . import kill_cmd
+
+_BACKUP_NAME_RE = re.compile(r"^seedling-repo-backup(-\d+)?$")
 
 
 def _candidate_profiles() -> list[Path]:
@@ -56,44 +59,138 @@ def _strip_hook(profile: Path) -> bool:
     return True
 
 
+def _has_repos() -> bool:
+    return paths.REPO_DIR.exists() and any(paths.REPO_DIR.iterdir())
+
+
+def _move_repos_to_safety() -> Path:
+    """Moves ~/seedling/repo out to a sibling folder in the user's home
+    directory, so it survives `shutil.rmtree`-ing everything else under
+    ~/seedling. Picks a non-colliding name if run more than once."""
+    base = Path.home() / "seedling-repo-backup"
+    dest = base
+    n = 1
+    while dest.exists():
+        dest = Path(f"{base}-{n}")
+        n += 1
+    shutil.move(str(paths.REPO_DIR), str(dest))
+    return dest
+
+
+def _existing_backups() -> list[Path]:
+    """Backup folders left behind by previous `seed purge --keep-repos` runs
+    (~/seedling-repo-backup, -1, -2, ...). Without --keep-repos this time,
+    the user has said they don't want cloned repos kept around at all, so
+    these stale backups get cleaned up too instead of accumulating forever."""
+    home = Path.home()
+    return sorted(
+        p for p in home.iterdir()
+        if p.is_dir() and _BACKUP_NAME_RE.match(p.name)
+    )
+
+
 def run(args) -> int:
     home = paths.HOME
+    keep_repos = getattr(args, "keep_repos", False)
+    old_backups = [] if keep_repos else _existing_backups()
 
-    if not getattr(args, "yes", False):
-        print(f"This fully uninstalls seedling: deletes EVERYTHING under {home}")
-        print("(all base pythons, venvs, VS Code, cloned repos, uv, and seedling's")
-        print("own source) AND removes the `seed` shell hook from your shell profile.")
-        print("After this, `seed` stops working entirely -- you'd need to reinstall.")
-        print("It will also force-close any running Python/VS Code processes first")
-        print("(not just seedling's) so nothing blocks deletion.")
-        answer = input("Type 'yes' to confirm: ").strip().lower()
-        if answer != "yes":
-            print("Aborted. Nothing was removed.")
-            return 1
+    if confirm.preview_requested(args):
+        items = []
+        if home.exists():
+            items += sorted(str(p) for p in home.iterdir())
+        items += [f"{p}  (shell hook line removed)"
+                  for p in _candidate_profiles() if p.exists()]
+        items += [f"{p}  (leftover backup from a previous --keep-repos purge)"
+                  for p in old_backups]
+        notes = ["any running Python/VS Code processes will be force-closed "
+                 "first (not just seedling's) so nothing blocks deletion",
+                 "after a real run, `seed` stops working entirely"]
+        if keep_repos and _has_repos():
+            notes.append(f"{paths.REPO_DIR} would be moved to safety first "
+                         "(--keep-repos), not deleted")
+        confirm.print_preview("fully uninstall seedling", items, notes=notes)
+        return 0
+
+    if not confirm.auto_confirmed(args):
+        print()
+        print(colors.danger("This fully uninstalls seedling.") + " It will:")
+        print()
+        print(f"  - delete {colors.bold('everything')} under {home}")
+        print("    (base pythons, venvs, VS Code, cloned repos, uv, and seedling's own source)")
+        print("  - remove the `seed` shell hook from your shell profile")
+        print("  - force-close any running Python/VS Code processes first,")
+        print("    not just seedling's, so nothing blocks deletion")
+        print()
+        print(colors.warn("After this, `seed` stops working entirely -- you'd need to reinstall."))
+        print()
+
+        if not keep_repos and _has_repos():
+            print(f"Note: {paths.REPO_DIR} has cloned repos in it. They'll be deleted "
+                  "along with everything else unless you re-run this with --keep-repos.")
+            print()
+
+        if old_backups:
+            print("Note: also deleting leftover repo backup folder(s) from a previous "
+                  "`seed purge --keep-repos` (this run isn't keeping repos, so these "
+                  "won't be left behind either):")
+            for p in old_backups:
+                print(f"  - {p}")
+            print()
+
+    if not confirm.confirm(args):
+        print("Aborted. Nothing was removed.")
+        return 1
+    print()
 
     print("Closing Python and VS Code processes so nothing is left in use...")
     killed = kill_cmd.kill_python_and_vscode()
     print(f"Closed {len(killed)} process(es)." if killed else "Nothing matching was running.")
+    print()
+
+    repo_backup = None
+    if keep_repos and _has_repos():
+        repo_backup = _move_repos_to_safety()
+        print(f"Moved your cloned repos to {repo_backup} before deleting the rest.")
+        print()
 
     removed_from = [p for p in _candidate_profiles() if _strip_hook(p)]
 
+    failures: list[str] = []
+
+    if old_backups:
+        print(f"Deleting {len(old_backups)} leftover repo backup folder(s) ...")
+        for p in old_backups:
+            failures.extend(fsutil.robust_rmtree(p))
+        print()
+
     if home.exists():
         print(f"Deleting {home} ...")
-        shutil.rmtree(home, ignore_errors=True)
+        runlog.close_before_deleting_home()
+        failures.extend(fsutil.robust_rmtree(home))
 
+    print()
     if removed_from:
         print("Removed the seedling shell hook from:")
         for p in removed_from:
             print(f"  - {p}")
     else:
-        print("No shell hook found in the usual profile locations "
-              "(nothing to clean up there, or it lives somewhere this "
-              "command doesn't check).")
+        print("No shell hook found in the usual profile locations.")
+        print("(Nothing to clean up there, or it lives somewhere this command doesn't check.)")
 
-    if home.exists():
-        print("Some files under seedling could not be removed (still in use?). "
-              "Close anything else that might have them open and try again.")
+    if failures:
+        print()
+        print(colors.warn("Some files under seedling could not be removed after several attempts:"))
+        for f in failures:
+            print(f"  - {f}")
+        print()
+        print("These are usually held open by something outside Python/VS Code.")
+        print("Close whatever has them open and run `seed purge` again.")
         return 1
 
-    print("seedling has been fully uninstalled.")
+    print()
+    print(colors.ok("seedling has been fully uninstalled."))
+    if repo_backup:
+        print()
+        print(f"Your cloned repos are safe at {repo_backup}.")
+        print("Move them wherever you'd like -- seedling won't touch that folder again.")
     return 0
