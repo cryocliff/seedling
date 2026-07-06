@@ -1,12 +1,13 @@
 # seedling installer (PowerShell) -- mirrors how `uv` installs itself.
 # Requires nothing pre-installed; works on a stock Windows PowerShell / pwsh.
 #
-# Usage (from a local checkout of this repo):
-#   .\install.ps1
+# Usage (from a local checkout of this repo, either works):
+#   .\install.cmd            (also handles the execution policy for you)
+#   .\installers\install.ps1
 #
 # Usage (remote):
-#   irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex
-#   $env:SEEDLING_REPO = "https://github.com/someone/fork.git"; irm .../install.ps1 | iex
+#   irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.ps1 | iex
+#   $env:SEEDLING_REPO = "https://github.com/someone/fork.git"; irm .../installers/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
@@ -46,15 +47,18 @@ function Read-SeedlingConf($path) {
 # against that instead of calling Split-Path on a null value.
 $ScriptPath = $MyInvocation.MyCommand.Path
 $ScriptDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { $null }
+# This script lives in installers\; the repo root (seedling.conf, src\) is
+# one level up.
+$RepoRoot = if ($ScriptDir) { Split-Path -Parent $ScriptDir } else { $null }
 
 $HasLocalCheckout = $false
-if ($ScriptDir) {
-    if (Test-Path (Join-Path $ScriptDir "pyproject.toml")) {
+if ($RepoRoot) {
+    if (Test-Path (Join-Path $RepoRoot "src\pyproject.toml")) {
         $HasLocalCheckout = $true
     }
 }
 
-$Conf = if ($ScriptDir) { Read-SeedlingConf (Join-Path $ScriptDir "seedling.conf") } else { @{} }
+$Conf = if ($RepoRoot) { Read-SeedlingConf (Join-Path $RepoRoot "seedling.conf") } else { @{} }
 
 # Source resolution: SEEDLING_REPO env var (one-run override) beats
 # seedling.conf, which beats the baked-in default.
@@ -80,10 +84,11 @@ $SeedlingHome = if ($env:SEEDLING_HOME) {
 }
 
 $InstalledFromDir = $null
+$CloneMode = $false
 if ($HasLocalCheckout) {
-    $OriginalSrc = $ScriptDir
+    $OriginalSrc = $RepoRoot
     $CleanupOriginalSrc = $false
-} elseif ((Test-Path $SeedlingRepo -PathType Container) -and (Test-Path (Join-Path $SeedlingRepo "pyproject.toml"))) {
+} elseif ((Test-Path $SeedlingRepo -PathType Container) -and (Test-Path (Join-Path $SeedlingRepo "src\pyproject.toml"))) {
     # SEEDLING_REPO can be a plain directory instead of a git URL -- e.g. a
     # network drive holding a copy of this repo, on machines/networks with
     # no GitHub access at all.
@@ -95,6 +100,7 @@ if ($HasLocalCheckout) {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die "git is required to clone $SeedlingRepo." }
     $OriginalSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("seedling-src-" + [System.Guid]::NewGuid())
     $CleanupOriginalSrc = $true
+    $CloneMode = $true
     Info "Cloning $SeedlingRepo ..."
     git clone --depth 1 $SeedlingRepo $OriginalSrc
 }
@@ -123,6 +129,12 @@ Info "Copying source into $SeedlingHome\system\src ..."
 $SrcDir = Join-Path $SeedlingHome "system\src"
 if (Test-Path $SrcDir) { Remove-Item -Recurse -Force $SrcDir }
 Copy-Item -Recurse -Force $OriginalSrc $SrcDir
+# No git checkout lives inside ~\seedling: updates re-download from the
+# recorded update_source (see below) instead of `git pull`-ing, so the
+# .git folder would be dead weight (and its read-only object files used
+# to break deletion on Windows).
+$SrcGit = Join-Path $SrcDir ".git"
+if (Test-Path $SrcGit) { Remove-Item -Recurse -Force $SrcGit }
 
 if ($CleanupOriginalSrc) {
     Remove-Item -Recurse -Force $OriginalSrc -ErrorAction SilentlyContinue
@@ -138,15 +150,30 @@ if ($Conf.Count -eq 0) {
     $Conf = Read-SeedlingConf (Join-Path $SrcDir "seedling.conf")
 }
 
-# `seed update-commands` should keep pulling from wherever this install
-# actually came from: a directory source, or any URL that isn't the public
-# default (self-hosted git). Public-default installs leave this unset and
-# update via the clone's own git remote, as always.
+# Record where this install came from, so `seed update-commands` knows
+# where to fetch newer versions (there's no git checkout inside ~\seedling
+# to pull with -- updating re-downloads from this source instead):
+#   - directory install  -> that directory
+#   - cloned from a URL  -> that URL
+#   - local checkout     -> env var / org-edited conf if given, else the
+#                           checkout's own origin remote, else the
+#                           resolved (default) URL
 $UpdateSourceSeed = $null
 if ($InstalledFromDir) {
     $UpdateSourceSeed = $InstalledFromDir
-} elseif ($SeedlingRepo -ne $DefaultSeedlingRepo) {
+} elseif ($CloneMode) {
     $UpdateSourceSeed = $SeedlingRepo
+} else {
+    if ($env:SEEDLING_REPO) {
+        $UpdateSourceSeed = $SeedlingRepo
+    } elseif ($Conf["SEEDLING_REPO_URL"] -and $Conf["SEEDLING_REPO_URL"] -ne $DefaultSeedlingRepo) {
+        $UpdateSourceSeed = $Conf["SEEDLING_REPO_URL"]
+    } elseif ((Test-Path (Join-Path $RepoRoot ".git")) -and (Get-Command git -ErrorAction SilentlyContinue)) {
+        # try/catch because under $ErrorActionPreference = "Stop", git
+        # writing to stderr (e.g. no origin remote) would abort the install.
+        $UpdateSourceSeed = try { git -C $RepoRoot remote get-url origin 2>$null | Select-Object -First 1 } catch { $null }
+    }
+    if (-not $UpdateSourceSeed) { $UpdateSourceSeed = $SeedlingRepo }
 }
 
 $SettingsFile = Join-Path $SeedlingHome "system\config\settings.json"
@@ -190,10 +217,50 @@ Info "Installing the seedling CLI ..."
 $env:UV_TOOL_DIR = "$SeedlingHome\system\tool"
 $env:UV_TOOL_BIN_DIR = "$SeedlingHome\system\bin"
 $env:UV_CACHE_DIR = "$SeedlingHome\system\cache\uv"
-& $UvExe tool install --force --reinstall $SrcDir
+& $UvExe tool install --force --reinstall (Join-Path $SrcDir "src")
 
 $SeedCli = Join-Path $SeedlingHome "system\bin\seed-cli.exe"
 if (-not (Test-Path $SeedCli)) { Die "seed-cli was not installed correctly." }
+
+# ---------------------------------------------------------------------------
+# 4b. Default environment: the newest stable Python plus a 'dev' venv (with
+#     the default packages) that every new shell auto-activates -- so a
+#     fresh install is immediately usable with plain `python`/`ipython`.
+#     Skip with SEEDLING_AUTO_SETUP=no (env var or seedling.conf). Never
+#     fatal: a network hiccup here still leaves a working seedling.
+# ---------------------------------------------------------------------------
+$AutoSetup = if ($env:SEEDLING_AUTO_SETUP) {
+    $env:SEEDLING_AUTO_SETUP
+} elseif ($Conf["SEEDLING_AUTO_SETUP"]) {
+    $Conf["SEEDLING_AUTO_SETUP"]
+} else {
+    "yes"
+}
+
+$DevReady = $false
+if (@("no", "0", "false") -contains $AutoSetup.ToLower()) {
+    Info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AutoSetup)."
+} elseif (Test-Path (Join-Path $SeedlingHome "python\venvs\dev")) {
+    Info "Default 'dev' venv already exists, leaving it as-is."
+    $DevReady = $true
+} else {
+    Info "Setting up the default environment: newest Python + a 'dev' venv ..."
+    $env:SEEDLING_HOME = $SeedlingHome
+    & $SeedCli python
+    if ($LASTEXITCODE -eq 0) { & $SeedCli venv dev }
+    if ($LASTEXITCODE -eq 0) {
+        # Make 'dev' the venv new shells auto-activate -- unless the user
+        # already chose one (reinstall case).
+        $env:SEEDLING_NO_LOG = "1"
+        $existingDefault = & $SeedCli config get default_venv
+        Remove-Item Env:SEEDLING_NO_LOG -ErrorAction SilentlyContinue
+        if (-not $existingDefault) { & $SeedCli config set default_venv dev }
+        $DevReady = $true
+    } else {
+        Warn "Default environment setup didn't finish (network problem?)."
+        Warn "Set it up later with:  seed python; seed venv dev; seed config set default_venv dev"
+    }
+}
 
 # ---------------------------------------------------------------------------
 # 5. Write the `seed` PowerShell function and hook it into $PROFILE
@@ -227,11 +294,20 @@ if (-not ($cleaned -contains $hookLine)) {
 
 Info "seedling is installed."
 Write-Host ""
-Write-Host "Open a new terminal (or run: . `"$seedPs1`") and try:"
-Write-Host "  seed python 312"
-Write-Host "  seed venv myproject"
-Write-Host "  seed activate myproject"
-Write-Host "  seed vscode"
+if ($DevReady) {
+    Write-Host "Open a new terminal (or run: . `"$seedPs1`") --"
+    Write-Host "the 'dev' venv auto-activates there, so you can immediately try:"
+    Write-Host "  python / ipython          # the newest Python, ready to go"
+    Write-Host "  seed install <package>    # add packages to 'dev'"
+    Write-Host "  seed venv myproject       # create another venv"
+    Write-Host "  seed summary              # see everything seedling has installed"
+} else {
+    Write-Host "Open a new terminal (or run: . `"$seedPs1`") and try:"
+    Write-Host "  seed python               # install the newest Python"
+    Write-Host "  seed venv myproject"
+    Write-Host "  seed activate myproject"
+    Write-Host "  seed summary"
+}
 Write-Host ""
 Write-Host "Note: seed-cli was installed from a private copy at $SrcDir."
 Write-Host "Nothing updates it automatically -- run 'seed update-commands' whenever"

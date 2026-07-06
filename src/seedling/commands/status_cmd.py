@@ -140,14 +140,18 @@ def _check_defaults() -> None:
     update_source = config.get("update_source")
     if update_source:
         source = Path(str(update_source)).expanduser()
-        if source.is_dir() and not (source / "pyproject.toml").exists():
-            _warn(f"update_source directory {source} has no pyproject.toml -- "
+        if source.is_dir() and not (source / "src" / "pyproject.toml").exists():
+            _warn(f"update_source directory {source} has no src/pyproject.toml -- "
                   "`seed update-commands` will refuse it")
         elif source.is_dir():
             _ok(f"update_source directory {source} looks usable")
         else:
             _ok(f"update_source is set to {update_source} (assumed git URL; "
                 "not checked over the network)")
+    else:
+        _warn("no update_source recorded -- `seed update-commands` can only "
+              "reinstall the existing copy, not fetch newer versions; set one "
+              "with `seed config set update_source <git-url-or-directory>`")
 
 
 _HOOK_PATH_RE = re.compile(r'["\']([^"\']*seed\.(?:ps1|sh))["\']')

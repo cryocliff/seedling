@@ -15,11 +15,11 @@ KNOWN_KEYS: dict[str, str] = {
         "Venv name every new shell auto-activates on startup. Empty/null "
         "means no auto-activation."),
     "update_source": (
-        "Where `seed update-commands` pulls seedling's own source from: a "
+        "Where `seed update-commands` fetches seedling's own source from: a "
         "git URL (including self-hosted GitHub/GitLab on another network) "
         "OR a plain directory path (e.g. a mounted network drive holding a "
-        "copy of the repo). Empty/null means the git remote the source was "
-        "originally cloned from."),
+        "copy of the repo). Recorded automatically at install time. "
+        "Empty/null means updates can only reinstall the existing copy."),
     "venv_default_packages": (
         "Packages installed into every new venv (list). Skip per-venv with "
         "`seed venv <name> --no-default-packages`."),

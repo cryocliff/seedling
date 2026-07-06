@@ -41,8 +41,8 @@ def find_uv() -> Path:
     raise UvNotFound(
         "uv was not found in ~/seedling/bin or on PATH.\n"
         "Re-run the seedling installer:\n"
-        "  bash:       curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh\n"
-        "  powershell: irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex"
+        "  bash:       curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.sh | sh\n"
+        "  powershell: irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.ps1 | iex"
     )
 
 

@@ -44,7 +44,18 @@ def run(args) -> int:
     runlog.close_before_deleting_home()
     failures = fsutil.robust_rmtree(home)
 
-    if failures:
+    if failures and fsutil.failures_are_only_running_cli(failures, home):
+        # The only survivors are seedling's own running program (the
+        # seed-cli shim and the tool venv python executing this very
+        # command) -- Windows can't delete a running executable, so hand
+        # the last few files to a detached helper that runs after exit.
+        fsutil.schedule_deferred_delete(home)
+        print()
+        print("The only files left are seedling's own running program, which")
+        print("can't delete itself while it's still running. A background")
+        print("cleanup removes them automatically a moment after this")
+        print("command exits -- nothing more to do.")
+    elif failures:
         print()
         print(colors.warn("Some files could not be removed after several attempts:"))
         for f in failures:
@@ -60,6 +71,6 @@ def run(args) -> int:
     print()
     print("Note: the `seed` shell function/alias itself is still in your shell profile.")
     print("Run `seed purge` instead next time for a full clean removal, or")
-    print("run the uninstaller (uninstall.sh / uninstall.cmd / uninstall.ps1) to")
-    print("just remove the shell hook now.")
+    print("run the uninstaller (uninstall.cmd -- or `sh uninstall.cmd` on")
+    print("macOS/Linux) to just remove the shell hook now.")
     return 0

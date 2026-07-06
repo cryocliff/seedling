@@ -1,5 +1,9 @@
+:; exec sh "$(dirname "$0")/installers/uninstall.sh" # POSIX shells take this line; the comment also swallows the CR of the CRLF line ending
 @echo off
-rem Double-click this file, or run `.\uninstall.cmd` -- no PowerShell flags
-rem to remember.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1" %*
+rem The generic seedling uninstaller -- one file, every platform:
+rem   Windows:     double-click this file, or run `.\uninstall.cmd`
+rem   macOS/Linux: run `sh ./uninstall.cmd` (line 1 hands off to
+rem                installers/uninstall.sh; cmd.exe reads that same line as
+rem                a label and skips it)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0installers\uninstall.ps1" %*
 if errorlevel 1 pause

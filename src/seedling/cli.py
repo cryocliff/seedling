@@ -33,7 +33,7 @@ from .uv_tool import UvNotFound
 # commands. This groups them the way a person actually thinks about them.
 _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Python & venvs", [
-        ("python", "<version>", "Install a base Python interpreter"),
+        ("python", "[version]", "Install a base Python (newest stable if no version)"),
         ("list-python", "", "List installed base Python interpreters"),
         ("venv", "<name> [--python <tag>]", "Create a venv from a base Python"),
         ("list-venvs", "", "List venvs, and which one is active"),
@@ -108,7 +108,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "SEEDLING_NONINTERACTIVE=1 does the same.")
 
     p_python = sub.add_parser("python", help="Install a base Python version")
-    p_python.add_argument("version", nargs="?", help="e.g. 312, 3.12, 3.12.4")
+    p_python.add_argument("version", nargs="?",
+                           help="e.g. 312, 3.12, 3.12.4; omit to install "
+                                "the newest stable version")
 
     p_remove_python = sub.add_parser(
         "remove-python", parents=[danger],

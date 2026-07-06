@@ -1,104 +1,112 @@
 """
 `seed update-commands` -- the ONLY way seedling's own commands change.
 
-install.sh/install.ps1 install seedling by cloning it straight from GitHub
-into ~/seedling/src, and installing seed-cli from that copy -- not from
-wherever the user happened to run the installer from. That copy never
-changes on its own. The only thing that updates ~/seedling/src (and
-therefore the installed `seed` command) is this command, on request only.
+The installers copy seedling's source into ~/seedling/system/src (WITHOUT
+its .git folder -- no git checkout lives inside seedling) and record where
+that source came from in the `update_source` setting: the git URL it was
+cloned from, or the directory it was copied from. That copy never changes
+on its own. This command updates by RE-FETCHING from the recorded source:
 
-Where updates come from, in order:
-  1. the `update_source` config value, if set (`seed config set
-     update_source ...`) -- either a git URL (works with self-hosted
-     GitHub/GitLab on isolated networks) or a plain directory path (e.g. a
-     network drive holding a copy of this repo, for machines with no git
-     hosting at all);
-  2. otherwise, the git remote ~/seedling/src was originally cloned from.
+  - git URL          -> fresh `git clone --depth 1` into a temp folder,
+                        then swap it in (minus .git)
+  - directory path   -> re-copy from that directory (minus .git)
+  - nothing recorded -> reinstall the local copy as-is, which doubles as a
+                        "repair" command for hand-edited sources
+
+Either way, seed-cli is then reinstalled from the refreshed copy.
 """
 
 from __future__ import annotations
 
 import shutil
-import subprocess
 from pathlib import Path
 
-from .. import colors, config, paths, uv_tool, git_tool
+from .. import colors, config, fsutil, paths, uv_tool, git_tool
 
 
-def _refresh_from_directory(src: Path, source_dir: Path) -> bool:
-    """Replace ~/seedling/system/src with a copy of `source_dir`."""
-    if not (source_dir / "pyproject.toml").exists():
-        print(f"error: {source_dir} doesn't look like a seedling source tree "
-              "(no pyproject.toml). Check the `update_source` config value.")
+def _swap_in(src: Path, tmp: Path) -> bool:
+    """Replace ~/seedling/system/src with the freshly fetched copy at `tmp`.
+    robust_rmtree (not plain rmtree) because pre-existing installs may still
+    have a .git full of read-only object files in the old copy."""
+    failures = fsutil.robust_rmtree(src)
+    if failures:
+        print("Could not replace the old source copy; these files are stuck:")
+        for f in failures:
+            print(f"  - {f}")
+        fsutil.robust_rmtree(tmp)
         return False
-    print(f"Copying seedling source from {source_dir} ...")
-    tmp = src.parent / (src.name + ".new")
-    if tmp.exists():
-        shutil.rmtree(tmp, ignore_errors=True)
-    shutil.copytree(source_dir, tmp, ignore=shutil.ignore_patterns(".git"))
-    shutil.rmtree(src, ignore_errors=True)
     tmp.rename(src)
     return True
 
 
-def _refresh_from_git(src: Path, url: str | None) -> None:
-    """git pull into ~/seedling/system/src -- from `url` if given, else from
-    whatever remote the checkout already points at. Never fatal: a failed
-    pull falls back to reinstalling the local copy as-is."""
-    git = git_tool.find_git()
-    if git is None:
-        print("git isn't available, so seedling can't pull updates. "
+def _refresh_from_directory(src: Path, source_dir: Path) -> bool:
+    """Replace ~/seedling/system/src with a copy of `source_dir`."""
+    if not (source_dir / "src" / "pyproject.toml").exists():
+        print(f"error: {source_dir} doesn't look like a seedling source tree "
+              "(no src/pyproject.toml). Check the `update_source` config value.")
+        return False
+    print(f"Copying seedling source from {source_dir} ...")
+    tmp = src.parent / (src.name + ".new")
+    fsutil.robust_rmtree(tmp)
+    shutil.copytree(source_dir, tmp, ignore=shutil.ignore_patterns(".git"))
+    return _swap_in(src, tmp)
+
+
+def _refresh_from_url(src: Path, url: str) -> bool:
+    """Replace ~/seedling/system/src with a fresh shallow clone of `url`.
+    Never fatal: a failed download leaves the current copy in place, and
+    the reinstall below still runs against it."""
+    try:
+        git = git_tool.ensure_git()
+    except git_tool.GitNotFound as e:
+        print(f"git isn't available ({e}), so seedling can't download updates. "
               "Reinstalling from the current local copy instead.")
-        return
+        return True
 
-    if url is None:
-        remote = subprocess.run(
-            [git, "-C", str(src), "remote", "get-url", "origin"],
-            capture_output=True, text=True,
-        ).stdout.strip()
-        label = f" from {remote}" if remote else ""
-        pull_cmd = [git, "-C", str(src), "pull", "--ff-only"]
-    else:
-        label = f" from {url} (update_source)"
-        pull_cmd = [git, "-C", str(src), "pull", "--ff-only", url]
-
-    print(f"Checking for updates{label} ...")
-    returncode = git_tool.run_streamed(pull_cmd)
+    print(f"Downloading the latest seedling from {url} ...")
+    tmp = src.parent / (src.name + ".new")
+    fsutil.robust_rmtree(tmp)
+    returncode = git_tool.run_streamed([git, "clone", "--depth", "1", url, str(tmp)])
     if returncode != 0:
-        print("git pull failed; reinstalling from the current local copy instead.")
+        print("Download failed; reinstalling from the current local copy instead.")
+        fsutil.robust_rmtree(tmp)
+        return True
+    if not (tmp / "src" / "pyproject.toml").exists():
+        print(f"warning: what {url} serves doesn't look like a seedling source "
+              "tree (no src/pyproject.toml); keeping the current copy.")
+        fsutil.robust_rmtree(tmp)
+        return True
+    fsutil.robust_rmtree(tmp / ".git")
+    return _swap_in(src, tmp)
 
 
 def run(args) -> int:
     src = paths.SRC_DIR
     if not src.exists():
         print(f"No seedling source found at {src}.")
-        print("Re-run install.sh / install.cmd / install.ps1 to set it up.")
+        print("Re-run the installer (install.cmd -- or `sh install.cmd` on "
+              "macOS/Linux) to set it up.")
         return 1
 
     update_source = config.get("update_source")
-    source_dir = Path(update_source).expanduser() if update_source else None
 
-    if source_dir is not None and source_dir.is_dir():
-        if not _refresh_from_directory(src, source_dir):
-            return 1
-    elif update_source:
-        if not (src / ".git").is_dir():
-            print(f"{src} isn't a git checkout, so the git URL in "
-                  f"`update_source` can't be pulled from. If {update_source} "
-                  "was meant to be a directory, it wasn't found.")
-            print("Reinstalling from the current local copy instead.")
+    if update_source:
+        source_dir = Path(str(update_source)).expanduser()
+        if source_dir.is_dir():
+            if not _refresh_from_directory(src, source_dir):
+                return 1
         else:
-            _refresh_from_git(src, str(update_source))
-    elif (src / ".git").is_dir():
-        _refresh_from_git(src, None)
+            if not _refresh_from_url(src, str(update_source)):
+                return 1
     else:
-        print(f"{src} isn't a git checkout, so there's no remote to pull "
-              "updates from. Reinstalling from the current local copy "
-              "(this still picks up any changes you made there by hand). "
-              "Tip: `seed config set update_source <git-url-or-directory>` "
+        print("No update source is recorded, so there's nowhere to fetch a "
+              "newer version from; reinstalling from the current local copy "
+              "(this still picks up any changes made there by hand).")
+        print("Tip: `seed config set update_source <git-url-or-directory>` "
               "gives this command somewhere to update from.")
 
     print("Reinstalling the seed CLI ...")
-    uv_tool.run(["tool", "install", "--force", "--reinstall", str(src)], env=uv_tool.tool_install_env())
+    # The python package (pyproject.toml) lives in src/ within the repo tree.
+    uv_tool.run(["tool", "install", "--force", "--reinstall", str(src / "src")], env=uv_tool.tool_install_env())
     print(colors.ok("Done. Your `seed` commands are up to date."))
     return 0

@@ -3,12 +3,13 @@
 # Requires nothing pre-installed except a POSIX shell and curl/wget (both
 # already present on essentially every macOS/Linux system).
 #
-# Usage (from a local checkout of this repo):
-#   ./install.sh
+# Usage (from a local checkout of this repo, either works):
+#   sh ./install.cmd
+#   sh installers/install.sh
 #
 # Usage (remote):
-#   curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh
-#   SEEDLING_REPO=https://github.com/someone/fork.git curl -fsSL .../install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.sh | sh
+#   SEEDLING_REPO=https://github.com/someone/fork.git curl -fsSL .../installers/install.sh | sh
 
 set -eu
 
@@ -21,6 +22,7 @@ DEFAULT_VENV_PACKAGES="ipython,ruff"
 
 SEEDLING_REPO_FROM_ENV="${SEEDLING_REPO:-}"
 SEEDLING_HOME_FROM_ENV="${SEEDLING_HOME:-}"
+SEEDLING_AUTO_SETUP_FROM_ENV="${SEEDLING_AUTO_SETUP:-}"
 
 info()  { printf '\033[1;32m==>\033[0m %s\n' "$1"; }
 warn()  { printf '\033[1;33m!!\033[0m %s\n' "$1"; }
@@ -30,8 +32,11 @@ die()   { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 # 1. Locate the seedling source (local checkout next to this script, or clone)
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# This script lives in installers/; the repo root (seedling.conf, src/) is
+# one level up.
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# seedling.conf next to this script is the deployment config: organizations
+# seedling.conf at the repo root is the deployment config: organizations
 # distributing seedling from their own git host or a network drive set the
 # source (and any install-time settings) there ONCE, and their users install
 # with no flags or env vars. Standard internet installs ship a conf whose
@@ -39,9 +44,10 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 SEEDLING_REPO_URL=""
 SEEDLING_HOME_DIR=""
 SEEDLING_VENV_DEFAULT_PACKAGES=""
+SEEDLING_AUTO_SETUP=""
 CONF_FILE=""
-if [ -f "$SCRIPT_DIR/seedling.conf" ]; then
-    CONF_FILE="$SCRIPT_DIR/seedling.conf"
+if [ -f "$REPO_ROOT/seedling.conf" ]; then
+    CONF_FILE="$REPO_ROOT/seedling.conf"
     . "$CONF_FILE"
 fi
 
@@ -70,10 +76,11 @@ else
 fi
 
 INSTALLED_FROM_DIR=""
-if [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
-    ORIGINAL_SRC="$SCRIPT_DIR"
+CLONE_MODE=0
+if [ -f "$REPO_ROOT/src/pyproject.toml" ]; then
+    ORIGINAL_SRC="$REPO_ROOT"
     CLEANUP_ORIGINAL_SRC=0
-elif [ -d "$SEEDLING_REPO" ] && [ -f "$SEEDLING_REPO/pyproject.toml" ]; then
+elif [ -d "$SEEDLING_REPO" ] && [ -f "$SEEDLING_REPO/src/pyproject.toml" ]; then
     # SEEDLING_REPO can be a plain directory instead of a git URL -- e.g. a
     # network drive holding a copy of this repo, on machines/networks with
     # no GitHub access at all.
@@ -85,6 +92,7 @@ else
     command -v git >/dev/null 2>&1 || die "git is required to clone $SEEDLING_REPO."
     ORIGINAL_SRC="$(mktemp -d)"
     CLEANUP_ORIGINAL_SRC=1
+    CLONE_MODE=1
     info "Cloning $SEEDLING_REPO ..."
     git clone --depth 1 "$SEEDLING_REPO" "$ORIGINAL_SRC"
 fi
@@ -112,6 +120,11 @@ info "Copying source into $SEEDLING_HOME/system/src ..."
 rm -rf "$SEEDLING_HOME/system/src"
 cp -R "$ORIGINAL_SRC" "$SEEDLING_HOME/system/src"
 SRC_DIR="$SEEDLING_HOME/system/src"
+# No git checkout lives inside ~/seedling: updates re-download from the
+# recorded update_source (see below) instead of `git pull`-ing, so the
+# .git folder would be dead weight (and its read-only object files used
+# to break deletion on Windows).
+rm -rf "$SRC_DIR/.git"
 
 if [ "$CLEANUP_ORIGINAL_SRC" = "1" ]; then
     rm -rf "$ORIGINAL_SRC"
@@ -127,15 +140,30 @@ if [ -z "$CONF_FILE" ] && [ -f "$SRC_DIR/seedling.conf" ]; then
     . "$SRC_DIR/seedling.conf"
 fi
 
-# `seed update-commands` should keep pulling from wherever this install
-# actually came from: a directory source, or any URL that isn't the public
-# default (self-hosted git). Public-default installs leave this unset and
-# update via the clone's own git remote, as always.
+# Record where this install came from, so `seed update-commands` knows
+# where to fetch newer versions (there's no git checkout inside ~/seedling
+# to pull with -- updating re-downloads from this source instead):
+#   - directory install  -> that directory
+#   - cloned from a URL  -> that URL
+#   - local checkout     -> the checkout's own origin remote if it has one,
+#                           else whatever URL the conf/default resolved to
 UPDATE_SOURCE_SEED=""
 if [ -n "$INSTALLED_FROM_DIR" ]; then
     UPDATE_SOURCE_SEED="$INSTALLED_FROM_DIR"
-elif [ "$SEEDLING_REPO" != "$DEFAULT_SEEDLING_REPO" ]; then
+elif [ "$CLONE_MODE" = "1" ]; then
     UPDATE_SOURCE_SEED="$SEEDLING_REPO"
+else
+    # Local checkout. An explicit env var or an org-edited conf states
+    # intent and wins; otherwise use the checkout's own origin remote;
+    # otherwise fall back to the resolved (default) URL.
+    if [ -n "$SEEDLING_REPO_FROM_ENV" ]; then
+        UPDATE_SOURCE_SEED="$SEEDLING_REPO"
+    elif [ -n "$SEEDLING_REPO_URL" ] && [ "$SEEDLING_REPO_URL" != "$DEFAULT_SEEDLING_REPO" ]; then
+        UPDATE_SOURCE_SEED="$SEEDLING_REPO_URL"
+    elif command -v git >/dev/null 2>&1 && [ -d "$REPO_ROOT/.git" ]; then
+        UPDATE_SOURCE_SEED="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
+    fi
+    [ -n "$UPDATE_SOURCE_SEED" ] || UPDATE_SOURCE_SEED="$SEEDLING_REPO"
 fi
 
 SETTINGS_FILE="$SEEDLING_HOME/system/config/settings.json"
@@ -201,9 +229,52 @@ UV="$SEEDLING_HOME/system/bin/uv"
 info "Installing the seedling CLI ..."
 env UV_TOOL_DIR="$SEEDLING_HOME/system/tool" UV_TOOL_BIN_DIR="$SEEDLING_HOME/system/bin" \
     UV_CACHE_DIR="$SEEDLING_HOME/system/cache/uv" \
-    "$UV" tool install --force --reinstall "$SRC_DIR"
+    "$UV" tool install --force --reinstall "$SRC_DIR/src"
 
 [ -x "$SEEDLING_HOME/system/bin/seed-cli" ] || die "seed-cli was not installed correctly."
+SEED_CLI="$SEEDLING_HOME/system/bin/seed-cli"
+
+# ---------------------------------------------------------------------------
+# 4b. Default environment: the newest stable Python plus a 'dev' venv (with
+#     the default packages) that every new shell auto-activates -- so a
+#     fresh install is immediately usable with plain `python`/`ipython`.
+#     Skip with SEEDLING_AUTO_SETUP=no (env var or seedling.conf). Never
+#     fatal: a network hiccup here still leaves a working seedling.
+# ---------------------------------------------------------------------------
+if [ -n "$SEEDLING_AUTO_SETUP_FROM_ENV" ]; then
+    AUTO_SETUP="$SEEDLING_AUTO_SETUP_FROM_ENV"
+elif [ -n "$SEEDLING_AUTO_SETUP" ]; then
+    AUTO_SETUP="$SEEDLING_AUTO_SETUP"
+else
+    AUTO_SETUP="yes"
+fi
+
+DEV_READY=0
+case "$AUTO_SETUP" in
+    no|NO|No|0|false|FALSE)
+        info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AUTO_SETUP)."
+        ;;
+    *)
+        if [ -d "$SEEDLING_HOME/python/venvs/dev" ]; then
+            info "Default 'dev' venv already exists, leaving it as-is."
+            DEV_READY=1
+        else
+            info "Setting up the default environment: newest Python + a 'dev' venv ..."
+            if env SEEDLING_HOME="$SEEDLING_HOME" "$SEED_CLI" python && \
+               env SEEDLING_HOME="$SEEDLING_HOME" "$SEED_CLI" venv dev; then
+                # Make 'dev' the venv new shells auto-activate -- unless the
+                # user already chose one (reinstall case).
+                if [ -z "$(env SEEDLING_HOME="$SEEDLING_HOME" SEEDLING_NO_LOG=1 "$SEED_CLI" config get default_venv 2>/dev/null)" ]; then
+                    env SEEDLING_HOME="$SEEDLING_HOME" "$SEED_CLI" config set default_venv dev
+                fi
+                DEV_READY=1
+            else
+                warn "Default environment setup didn't finish (network problem?)."
+                warn "Set it up later with:  seed python && seed venv dev && seed config set default_venv dev"
+            fi
+        fi
+        ;;
+esac
 
 # ---------------------------------------------------------------------------
 # 5. Write the `seed` shell function and hook it into the user's shell
@@ -248,11 +319,20 @@ esac
 
 info "seedling is installed."
 echo
-echo "Open a new terminal (or run: . \"$SEEDLING_HOME/system/shell/seed.sh\") and try:"
-echo "  seed python 312"
-echo "  seed venv myproject"
-echo "  seed activate myproject"
-echo "  seed vscode"
+if [ "$DEV_READY" = "1" ]; then
+    echo "Open a new terminal (or run: . \"$SEEDLING_HOME/system/shell/seed.sh\") --"
+    echo "the 'dev' venv auto-activates there, so you can immediately try:"
+    echo "  python / ipython          # the newest Python, ready to go"
+    echo "  seed install <package>    # add packages to 'dev'"
+    echo "  seed venv myproject       # create another venv"
+    echo "  seed summary              # see everything seedling has installed"
+else
+    echo "Open a new terminal (or run: . \"$SEEDLING_HOME/system/shell/seed.sh\") and try:"
+    echo "  seed python               # install the newest Python"
+    echo "  seed venv myproject"
+    echo "  seed activate myproject"
+    echo "  seed summary"
+fi
 echo
 echo "Note: seed-cli was installed from a private copy at $SEEDLING_HOME/system/src."
 echo "Nothing updates it automatically -- run 'seed update-commands' whenever"

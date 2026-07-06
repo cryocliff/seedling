@@ -22,8 +22,8 @@ _BACKUP_NAME_RE = re.compile(r"^seedling-repo-backup(-\d+)?$")
 # Shown before confirming and again after a successful purge -- once `seed`
 # is gone, this screen is the last place the user will see these.
 _REINSTALL_LINES = [
-    "  macOS/Linux:  curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh",
-    "  PowerShell:   irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex",
+    "  macOS/Linux:  curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.sh | sh",
+    "  PowerShell:   irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.ps1 | iex",
 ]
 
 
@@ -34,8 +34,8 @@ def _print_reinstall(update_source) -> None:
     print("To reinstall seedling later:")
     if update_source:
         print(f"  from your configured source ({update_source}):")
-        print("    run the installer from inside it (install.sh / install.cmd), or pass")
-        print("    it to either installer as the SEEDLING_REPO environment variable")
+        print("    run install.cmd from inside it (`sh install.cmd` on macOS/Linux), or")
+        print("    pass it to the installer as the SEEDLING_REPO environment variable")
         print("  or from the public repo:")
     for line in _REINSTALL_LINES:
         print(line)
@@ -229,7 +229,19 @@ def run(args) -> int:
         print("No shell hook found in the usual profile locations.")
         print("(Nothing to clean up there, or it lives somewhere this command doesn't check.)")
 
-    if failures:
+    if failures and fsutil.failures_are_only_running_cli(failures, home):
+        # The only survivors are seedling's own running program (the
+        # seed-cli shim and the tool venv python executing this very
+        # command) -- Windows can't delete a running executable, so hand
+        # the last few files to a detached helper that runs after exit.
+        fsutil.schedule_deferred_delete(home)
+        print()
+        print("The only files left are seedling's own running program, which")
+        print("can't delete itself while it's still running. A background")
+        print("cleanup removes them automatically a moment after this")
+        print("command exits -- nothing more to do.")
+        failures = []
+    elif failures:
         print()
         print(colors.warn("Some files under seedling could not be removed after several attempts:"))
         for f in failures:

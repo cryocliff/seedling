@@ -41,22 +41,22 @@ found; see [`seed clone-repo`](#seed-clone-repo-git-url) for details.
 ### One-line install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.sh | sh
 ```
 ```powershell
-irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.ps1 | iex
 ```
 
 By default the installers clone from
 `https://github.com/cryocliff/seedling.git` (the `DEFAULT_SEEDLING_REPO` /
-`$DefaultSeedlingRepo` value near the top of `install.sh` / `install.ps1`).
+`$DefaultSeedlingRepo` value near the top of `installers/install.sh` / `installers/install.ps1`).
 
 ### Local checkout install
 
 If you have a local copy of this project (e.g. an unzipped download), run
 the installer from inside it:
 
-- **macOS/Linux:** `./install.sh`
+- **macOS/Linux:** `sh ./install.cmd` (or `installers/install.sh` directly)
 - **Windows:** `install.cmd` (double-clicking it also works)
 
 ### Deployment configuration: `seedling.conf`
@@ -73,7 +73,7 @@ or environment variables:
 
 - `SEEDLING_REPO_URL` (default: the public GitHub repo) — the source used
   when the installer isn't run from inside a checkout, and where
-  `seed update-commands` pulls updates. A git URL or a plain directory path.
+  `seed update-commands` fetches updates. A git URL or a plain directory path.
 - `SEEDLING_HOME_DIR` (default: `~/seedling`) — the folder everything
   seedling manages lives in. A leading `~` means the installing user's
   home directory. The shell integration exports `SEEDLING_HOME` so
@@ -81,10 +81,17 @@ or environment variables:
 - `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff`) —
   comma-separated packages installed into every new venv (seeds the
   `venv_default_packages` setting).
+- `SEEDLING_AUTO_SETUP` (default: `yes`) — after installing seedling
+  itself, install the newest stable Python and create a `dev` venv (with
+  the default packages) that every new shell auto-activates. Set to `no`
+  for a bare install; the `SEEDLING_AUTO_SETUP` environment variable
+  overrides for one run. Never fatal: if this step fails (e.g. offline),
+  seedling itself is still installed and working.
 
-How it's applied: both installers read `seedling.conf` next to the script
-(a piped install reads the copy inside the repo it just cloned). Values
-that differ from the public defaults are written into
+How it's applied: both installers read `seedling.conf` at the repo root
+(a piped install reads the copy inside the repo it just cloned). The
+install source is always recorded as `update_source`, and other values
+that differ from the public defaults are written alongside it, into
 `~/seedling/system/config/settings.json` on **first install only** — an
 existing settings file is never overwritten, so later `seed config set`
 choices survive reinstalls. Resolution order for the install source:
@@ -98,26 +105,30 @@ choices survive reinstalls. Resolution order for the install source:
 `SEEDLING_REPO` accepts a git URL (a fork, or a self-hosted GitHub/GitLab
 on another network) or a plain directory path (e.g. a network drive
 holding a copy of this repo — no git hosting needed at all). When it's a
-directory, the installer records it as the `update_source` setting so
+directory, the installer copies from it instead of cloning. Either way
+the source is recorded as the `update_source` setting so
 `seed update-commands` keeps working from it too.
 
 ```sh
-SEEDLING_REPO=https://github.com/someone/fork.git ./install.sh
-SEEDLING_REPO=/mnt/share/seedling ./install.sh
+SEEDLING_REPO=https://github.com/someone/fork.git sh ./install.cmd
+SEEDLING_REPO=/mnt/share/seedling sh ./install.cmd
 ```
 ```powershell
-$env:SEEDLING_REPO = "https://github.com/someone/fork.git"; .\install.ps1
-$env:SEEDLING_REPO = "S:\shared\seedling"; .\install.ps1
+$env:SEEDLING_REPO = "https://github.com/someone/fork.git"; .\install.cmd
+$env:SEEDLING_REPO = "S:\shared\seedling"; .\install.cmd
 ```
 
 ### What the installer actually does, step by step
 
-1. **Locates the source.** If run from inside a folder with `pyproject.toml`
-   (a local checkout), it uses that. Otherwise it clones `SEEDLING_REPO`
-   (env var, or the baked-in default) via `git clone --depth 1`.
+1. **Locates the source.** If run from inside a copy of this repo (it
+   checks for `src/pyproject.toml`), it uses that. Otherwise it clones the
+   resolved source via `git clone --depth 1`, or copies it if it's a
+   directory path.
 2. **Lays out `~/seedling/`** — `system/bin/`, `system/config/`,
    `system/shell/`, `python/base/`, `python/venvs/`, `extensions/`, `repo/`.
-3. **Copies the source into `~/seedling/system/src`.** This copy, not the
+3. **Copies the source into `~/seedling/system/src`** — minus any `.git`
+   folder: no git checkout lives inside seedling, and the origin is
+   recorded in the `update_source` setting instead. This copy, not the
    original download/clone location, is what `seed-cli` actually gets
    installed from. See [The update model](#the-update-model).
 4. **Installs `uv` into `~/seedling/system/bin`**, using uv's own official
@@ -125,7 +136,7 @@ $env:SEEDLING_REPO = "S:\shared\seedling"; .\install.ps1
    `UV_NO_MODIFY_PATH=1` set (seedling manages its own PATH/shell
    integration rather than letting uv touch your global PATH). Skipped if
    `~/seedling/system/bin/uv` already exists.
-5. **Installs `~/seedling/system/src` as an isolated uv tool**, via
+5. **Installs `~/seedling/system/src/src` as an isolated uv tool**, via
    `uv tool install --force --reinstall`, with `UV_TOOL_DIR` and
    `UV_TOOL_BIN_DIR` redirected into `~/seedling/system/tool` and
    `~/seedling/system/bin`. uv will fetch its own private Python
@@ -133,7 +144,12 @@ $env:SEEDLING_REPO = "S:\shared\seedling"; .\install.ps1
    pre-installed. This produces the `seed-cli` binary/shim. `--reinstall`
    forces uv to bypass its build cache, which matters every time
    `seed update-commands` runs this same step later.
-6. **Writes the shell integration.** Copies `seed.sh.template` /
+6. **Sets up the default environment** (unless `SEEDLING_AUTO_SETUP` is
+   `no`, or a `dev` venv already exists from a previous install): installs
+   the newest stable Python, creates a `dev` venv with the default
+   packages, and records `dev` as the `default_venv` that new shells
+   auto-activate — unless a different `default_venv` was already chosen.
+7. **Writes the shell integration.** Copies `seed.sh.template` /
    `seed.ps1.template` into `~/seedling/system/shell/seed.sh` (or `.ps1`),
    with the real `~/seedling` path substituted in, then appends a line to
    your shell profile (`.zshrc`, `.bashrc`, `.profile`, or `$PROFILE`) that
@@ -141,23 +157,22 @@ $env:SEEDLING_REPO = "S:\shared\seedling"; .\install.ps1
 
 ### Windows execution policy
 
-Running `.\install.ps1` directly, with no flags, fails with an
+Running `.\installers\install.ps1` directly, with no flags, fails with an
 `is not digitally signed` error — that's Windows' default PowerShell policy
 blocking unsigned local scripts, not a bug in the script. Three ways around
 it:
 
-- Use `install.cmd` instead — it's a one-line batch wrapper that launches
-  `install.ps1` with `-ExecutionPolicy Bypass` scoped to that single run
-  only. It does not change your system-wide policy.
+- Use `install.cmd` instead — it launches `installers\install.ps1` with
+  `-ExecutionPolicy Bypass` scoped to that single run only. It does not change your system-wide policy.
 - Use the `irm | iex` one-liner — piping into `Invoke-Expression` never
   saves a local script file, so there's nothing for the policy to block.
-- Run manually: `powershell -ExecutionPolicy Bypass -File .\install.ps1`
+- Run manually: `powershell -ExecutionPolicy Bypass -File .\installers\install.ps1`
 
 **After a successful `install.cmd` run**, it opens a brand-new, ordinary
 PowerShell window (profile loads normally, so `seed` is available right
 away) with a short welcome banner listing the first few commands to try,
 and leaves it open at an interactive prompt. This isn't just a convenience:
-`install.cmd` itself runs in plain `cmd.exe`, and even drives `install.ps1`
+`install.cmd` itself runs in plain `cmd.exe`, and even drives `installers\install.ps1`
 with `-NoProfile`, so there's no window at any point in that original
 invocation where `seed` — a PowerShell function defined in `$PROFILE` —
 could actually work. On failure, this window is skipped and the original
@@ -243,7 +258,7 @@ shell function, since a subprocess has no way to affect your shell.
 
 Every command that deletes a directory (`remove-venv(s)`, `remove-python`,
 `remove-repo`, `remove-user`, `purge`) routes through a shared helper
-(`robust_rmtree`) that works around two real causes of "file in use" /
+(`robust_rmtree`) that works around four real causes of "file in use" /
 permission-denied failures, rather than the older behavior of just calling
 `shutil.rmtree(path, ignore_errors=True)` and hoping:
 
@@ -258,9 +273,22 @@ permission-denied failures, rather than the older behavior of just calling
    Python/VS Code processes first, see `seed kill-processes`) not having
    released its file handles instantly. The fix retries deletion a few
    times with a short delay instead of failing on the first pass.
+3. **Read-only files.** Windows refuses to delete them outright, and git
+   marks every file under `.git/objects` read-only — so any tree holding a
+   git checkout (every cloned repo, and seedling's own source copy) used
+   to fail on hundreds of files at once. The fix clears the read-only bit
+   and retries each failed file individually.
+4. **A program can't delete its own running executable.** `seed purge` and
+   `seed remove-user` run *as* `seed-cli.exe` (plus the tool venv's
+   `python.exe` underneath it), which live inside the very tree being
+   deleted. When those are the only survivors, the command hands them to a
+   small detached helper that finishes the deletion a moment after
+   `seed-cli` exits — and says so, instead of reporting an error. Nothing
+   further to do; the folder is gone a couple of seconds later.
 
-If a file is genuinely still stuck after all retries, you get its exact
-path printed, instead of a vague "something might be in use" message.
+If a file is genuinely still stuck after all retries — something *outside*
+seedling holding it open — you get its exact path printed, instead of a
+vague "something might be in use" message.
 
 ---
 
@@ -340,10 +368,13 @@ installed by uv's own tooling, which does its own verification.
 
 ## Command reference
 
-### `seed python <version>`
+### `seed python [version]`
 
 Installs a base CPython interpreter via `uv python install`, redirected
-(via `UV_PYTHON_INSTALL_DIR`) into `~/seedling/python/base`.
+(via `UV_PYTHON_INSTALL_DIR`) into `~/seedling/python/base`. With no
+version at all, installs the **newest stable Python** uv knows about and
+derives the tag from what actually landed (e.g. `314`) — this is what the
+installer's default-environment setup uses.
 
 - Accepts `312`, `3.12`, or `3.12.4` — digits are extracted and normalized
   into a dotted version spec for uv, and a short tag (e.g. `312`) for the
@@ -700,12 +731,16 @@ The **only** thing that updates the `seed` command itself after initial
 install. See [The update model](#the-update-model) below for the full
 explanation. In short:
 
-- If `~/seedling/system/src` is a git checkout, runs `git pull --ff-only`
-  against its origin remote (printing that remote's URL), then reinstalls
-  via `uv tool install --force --reinstall`.
-- If it isn't a git checkout, there's no remote to pull from — it just
-  reinstalls from whatever is currently in `~/seedling/system/src`, which
-  doubles as a repair command if you've hand-edited something there.
+- If the `update_source` setting holds a git URL, downloads a fresh
+  shallow clone of it into a temp folder, swaps it in as the new
+  `~/seedling/system/src` (minus its `.git`), then reinstalls via
+  `uv tool install --force --reinstall`.
+- If `update_source` holds a directory path, re-copies from it instead
+  (same swap, same reinstall).
+- If no source is recorded, it just reinstalls from whatever is currently
+  in `~/seedling/system/src`, which doubles as a repair command if you've
+  hand-edited something there. A failed download also falls back to this,
+  never leaving you without a working `seed`.
 
 ```
 seed update-commands
@@ -728,8 +763,8 @@ window blocking deletion of files inside `~/seedling`. Like
 confirmation prompt says so up front.
 
 This does **not** remove the `seed` shell function/hook from your shell
-profile — use `seed purge` (or `uninstall.sh` / `uninstall.cmd` /
-`uninstall.ps1`) for that.
+profile — use `seed purge` (or `uninstall.cmd` --
+`sh ./uninstall.cmd` on macOS/Linux) for that.
 
 ```
 seed remove-user
@@ -745,8 +780,8 @@ OS, since PowerShell itself is cross-platform — harmless no-ops wherever
 they don't exist).
 
 After `seed purge` finishes, `seed` stops existing as a command entirely.
-This is the same end state as running `uninstall.sh` / `uninstall.cmd` /
-`uninstall.ps1`, just reachable from inside `seed` itself without needing
+This is the same end state as running `uninstall.cmd` (or
+`sh ./uninstall.cmd` on macOS/Linux), just reachable from inside `seed` itself without needing
 the original installer files around. Reports exactly which profile files
 it edited.
 
@@ -836,8 +871,9 @@ setting with its current value and an explanation. The keys:
 - `update_source` — where `seed update-commands` gets seedling's own
   source: a git URL (works with self-hosted GitHub/GitLab on isolated
   networks) *or* a plain directory path (e.g. a network drive holding a
-  copy of the repo, for machines with no git hosting at all). Unset means
-  the git remote the source was originally cloned from.
+  copy of the repo, for machines with no git hosting at all). Recorded
+  automatically at install time; unset means updates can only reinstall
+  the existing copy.
 - `venv_default_packages` — the packages installed into every new venv
   (default: `ipython, ruff`). Takes comma-separated input.
 
@@ -875,16 +911,17 @@ from *that* private copy. Concretely:
 This means re-running the original `curl | sh` one-liner is not how you
 update seedling day-to-day — `seed update-commands` is.
 
-Where `seed update-commands` looks for newer source, in order:
+`~/seedling/system/src` is a plain copy of the source — deliberately NOT
+a git checkout (no `.git` folder lives inside seedling). Instead, the
+installer records where the source came from in the `update_source`
+setting, and `seed update-commands` re-fetches from there: a fresh shallow
+`git clone` for a URL, a re-copy for a directory path (see `seed config`).
 
-1. the `update_source` setting, if set — a git URL to pull from, or a
-   plain directory to re-copy from (see `seed config`);
-2. otherwise, the git remote `~/seedling/system/src` was originally cloned
-   from (`git pull --ff-only` against origin).
-
-If neither applies (not a git checkout, no `update_source`), it just
-reinstalls from whatever's currently in `~/seedling/system/src`, so it
-doubles as a "repair" command if you've hand-edited something.
+If no source is recorded, it just reinstalls from whatever's currently in
+`~/seedling/system/src`, so it doubles as a "repair" command if you've
+hand-edited something. Note that updating *overwrites* the private copy —
+hand-edits there don't survive an update (edit and reinstall from a real
+checkout instead if you're developing seedling itself).
 
 The installers accept the same flexibility up front: `SEEDLING_REPO` may
 be a git URL *or* a directory containing a copy of this repo. When it's a
@@ -898,7 +935,7 @@ automatically, so machines on networks without github.com stay updatable.
 - `seed remove-user` — removes everything *seedling manages* (Python
   installs, venvs, VS Code, cloned repos, uv, its own source) but leaves
   the `seed` shell hook in your profile.
-- `seed purge`, or `./uninstall.sh` / `uninstall.cmd` / `.\uninstall.ps1` —
+- `seed purge`, or `uninstall.cmd` (`sh ./uninstall.cmd` on macOS/Linux) —
   removes the `seed` shell hook from your profile **and** deletes
   `~/seedling` entirely, for a full clean removal. `seed purge` is the same
   operation reachable from inside `seed` itself, for when you don't have
