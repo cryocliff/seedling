@@ -8,6 +8,12 @@
 __SEEDLING_HOME="__SEEDLING_HOME_PLACEHOLDER__"
 __SEEDLING_CLI="$__SEEDLING_HOME/system/bin/seed-cli"
 
+# seed-cli itself resolves the seedling home from this variable (falling
+# back to ~/seedling). Exporting it here is what makes a custom
+# SEEDLING_HOME_DIR from seedling.conf work at runtime, not just at
+# install time. For default installs this is a no-op.
+export SEEDLING_HOME="$__SEEDLING_HOME"
+
 seed() {
     if [ "$1" = "activate" ]; then
         shift

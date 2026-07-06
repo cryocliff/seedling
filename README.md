@@ -189,23 +189,36 @@ cloned seedling from — it clones straight from the GitHub repo into
   currently there, so it also doubles as a "repair" command if you've
   hand-edited something.
 
-### Installing/updating on networks without github.com
+### Deploying inside an organization (no github.com needed)
 
-Both knobs accept **either a git URL or a plain directory path** (e.g. a
-self-hosted GitHub Enterprise remote, or a copy of this repo sitting on a
-network drive):
+[`seedling.conf`](seedling.conf) at the top of this repo is the deployment
+config. Every install-time setting is listed in it with its default value
+already filled in — values left at their defaults change nothing, so
+standard internet installs never touch the file. An organization replaces
+whichever values it needs in the copy of the repo it distributes, and
+everyone who installs from that copy picks them up automatically — no
+flags or environment variables for users to remember:
 
-- Install: `SEEDLING_REPO=<url-or-directory>` before running
-  `install.sh`/`install.ps1`. When it's a directory, the installer copies
-  from it and remembers it as the update source automatically.
-- Update: `seed config set update_source <url-or-directory>` — after that,
-  `seed update-commands` pulls from that URL, or re-copies from that
-  directory, instead of the original GitHub remote.
+- `SEEDLING_REPO_URL` — where seedling installs from and where
+  `seed update-commands` pulls updates. Accepts **either a git URL** (e.g.
+  a self-hosted GitHub Enterprise remote) **or a plain directory path**
+  (a copy of this repo on a network drive — no git hosting needed at all).
+- `SEEDLING_HOME_DIR` — the folder everything seedling manages lives in
+  (default `~/seedling`).
+- `SEEDLING_VENV_DEFAULT_PACKAGES` — the packages preinstalled into every
+  new venv (default `ipython,ruff`).
+
+Anything other than the public default gets written into seedling's own
+settings on first install (visible via `seed config`), so updates keep
+flowing from the right place afterward. Per-run overrides still work
+without editing anything: `SEEDLING_REPO=<url-or-directory>` before running
+the installer, or `seed config set update_source <url-or-directory>` later.
 
 ## Project layout (for contributors)
 
 ```
 pyproject.toml
+seedling.conf       deployment config: install/update source URL (or directory) + install-time settings
 src/seedling/
   cli.py            argparse dispatcher
   paths.py          single source of truth for the ~/seedling folder layout

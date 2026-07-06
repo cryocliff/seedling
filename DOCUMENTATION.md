@@ -59,6 +59,40 @@ the installer from inside it:
 - **macOS/Linux:** `./install.sh`
 - **Windows:** `install.cmd` (double-clicking it also works)
 
+### Deployment configuration: `seedling.conf`
+
+`seedling.conf` at the repo root is the single place a deployment's paths
+and install-time settings live. Every setting is listed in the file with
+its default value written out, so there's no guessing what can be changed
+or what the current behavior is — values left at their defaults change
+nothing. Standard users installing from the internet never touch it.
+Organizations replace whichever values they need in the copy of the repo
+they distribute (self-hosted git host, or a folder on a network drive),
+and everyone installing from that copy picks the values up with no flags
+or environment variables:
+
+- `SEEDLING_REPO_URL` (default: the public GitHub repo) — the source used
+  when the installer isn't run from inside a checkout, and where
+  `seed update-commands` pulls updates. A git URL or a plain directory path.
+- `SEEDLING_HOME_DIR` (default: `~/seedling`) — the folder everything
+  seedling manages lives in. A leading `~` means the installing user's
+  home directory. The shell integration exports `SEEDLING_HOME` so
+  seed-cli finds a custom location at runtime too.
+- `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff`) —
+  comma-separated packages installed into every new venv (seeds the
+  `venv_default_packages` setting).
+
+How it's applied: both installers read `seedling.conf` next to the script
+(a piped install reads the copy inside the repo it just cloned). Values
+that differ from the public defaults are written into
+`~/seedling/system/config/settings.json` on **first install only** — an
+existing settings file is never overwritten, so later `seed config set`
+choices survive reinstalls. Resolution order for the install source:
+
+1. `SEEDLING_REPO` environment variable (one-run override)
+2. `SEEDLING_REPO_URL` from `seedling.conf`
+3. the baked-in public default (what the piped one-liner uses)
+
 ### Installing from a different source, for one run
 
 `SEEDLING_REPO` accepts a git URL (a fork, or a self-hosted GitHub/GitLab

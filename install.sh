@@ -12,15 +12,15 @@
 
 set -eu
 
-# Where seedling is cloned from when this script isn't run from inside a
-# local checkout. Can be overridden per-run without editing the file --
-# SEEDLING_REPO accepts a git URL or a plain directory path:
-#   SEEDLING_REPO=https://github.com/someone/fork.git ./install.sh
-#   SEEDLING_REPO=/mnt/share/seedling ./install.sh
+# Built-in defaults. seedling.conf ships with these same values written
+# out, so a conf that still matches them changes nothing -- only edited
+# values have any effect. The baked-in copies exist for the piped
+# one-liner install, where no local seedling.conf exists yet to consult.
 DEFAULT_SEEDLING_REPO="https://github.com/cryocliff/seedling.git"
+DEFAULT_VENV_PACKAGES="ipython,ruff"
 
-SEEDLING_HOME="${SEEDLING_HOME:-$HOME/seedling}"
-SEEDLING_REPO="${SEEDLING_REPO:-$DEFAULT_SEEDLING_REPO}"
+SEEDLING_REPO_FROM_ENV="${SEEDLING_REPO:-}"
+SEEDLING_HOME_FROM_ENV="${SEEDLING_HOME:-}"
 
 info()  { printf '\033[1;32m==>\033[0m %s\n' "$1"; }
 warn()  { printf '\033[1;33m!!\033[0m %s\n' "$1"; }
@@ -30,6 +30,44 @@ die()   { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 # 1. Locate the seedling source (local checkout next to this script, or clone)
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# seedling.conf next to this script is the deployment config: organizations
+# distributing seedling from their own git host or a network drive set the
+# source (and any install-time settings) there ONCE, and their users install
+# with no flags or env vars. Standard internet installs ship a conf whose
+# values match the baked-in defaults, so nothing changes for them.
+SEEDLING_REPO_URL=""
+SEEDLING_HOME_DIR=""
+SEEDLING_VENV_DEFAULT_PACKAGES=""
+CONF_FILE=""
+if [ -f "$SCRIPT_DIR/seedling.conf" ]; then
+    CONF_FILE="$SCRIPT_DIR/seedling.conf"
+    . "$CONF_FILE"
+fi
+
+# Source resolution: SEEDLING_REPO env var (one-run override) beats
+# seedling.conf, which beats the baked-in default.
+if [ -n "$SEEDLING_REPO_FROM_ENV" ]; then
+    SEEDLING_REPO="$SEEDLING_REPO_FROM_ENV"
+elif [ -n "$SEEDLING_REPO_URL" ]; then
+    SEEDLING_REPO="$SEEDLING_REPO_URL"
+else
+    SEEDLING_REPO="$DEFAULT_SEEDLING_REPO"
+fi
+
+# Home resolution follows the same order. A leading "~" in the conf value
+# means the installing user's home directory.
+if [ -n "$SEEDLING_HOME_FROM_ENV" ]; then
+    SEEDLING_HOME="$SEEDLING_HOME_FROM_ENV"
+elif [ -n "$SEEDLING_HOME_DIR" ]; then
+    case "$SEEDLING_HOME_DIR" in
+        "~")   SEEDLING_HOME="$HOME" ;;
+        "~/"*) SEEDLING_HOME="$HOME/${SEEDLING_HOME_DIR#??}" ;;
+        *)     SEEDLING_HOME="$SEEDLING_HOME_DIR" ;;
+    esac
+else
+    SEEDLING_HOME="$HOME/seedling"
+fi
 
 INSTALLED_FROM_DIR=""
 if [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
@@ -79,11 +117,57 @@ if [ "$CLEANUP_ORIGINAL_SRC" = "1" ]; then
     rm -rf "$ORIGINAL_SRC"
 fi
 
-# When installing from a directory, remember it as the update source so
-# `seed update-commands` knows where to look for newer copies later.
-if [ -n "$INSTALLED_FROM_DIR" ] && [ ! -f "$SEEDLING_HOME/system/config/settings.json" ]; then
-    printf '{\n  "update_source": "%s"\n}\n' "$INSTALLED_FROM_DIR" \
-        > "$SEEDLING_HOME/system/config/settings.json"
+# ---------------------------------------------------------------------------
+# 2c. Seed seedling's settings from seedling.conf (first install only --
+#     an existing settings.json is never touched, so reinstalls don't
+#     clobber choices made later with `seed config set`).
+# ---------------------------------------------------------------------------
+# Piped installs have no local conf, but the clone we just copied does.
+if [ -z "$CONF_FILE" ] && [ -f "$SRC_DIR/seedling.conf" ]; then
+    . "$SRC_DIR/seedling.conf"
+fi
+
+# `seed update-commands` should keep pulling from wherever this install
+# actually came from: a directory source, or any URL that isn't the public
+# default (self-hosted git). Public-default installs leave this unset and
+# update via the clone's own git remote, as always.
+UPDATE_SOURCE_SEED=""
+if [ -n "$INSTALLED_FROM_DIR" ]; then
+    UPDATE_SOURCE_SEED="$INSTALLED_FROM_DIR"
+elif [ "$SEEDLING_REPO" != "$DEFAULT_SEEDLING_REPO" ]; then
+    UPDATE_SOURCE_SEED="$SEEDLING_REPO"
+fi
+
+SETTINGS_FILE="$SEEDLING_HOME/system/config/settings.json"
+if [ ! -f "$SETTINGS_FILE" ]; then
+    json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+    entries=""
+    if [ -n "$UPDATE_SOURCE_SEED" ]; then
+        entries="  \"update_source\": \"$(json_escape "$UPDATE_SOURCE_SEED")\""
+    fi
+    # Only seed the package list when it was actually changed -- the conf
+    # ships with the built-in default written out for discoverability.
+    pkgs_norm=$(printf '%s' "$SEEDLING_VENV_DEFAULT_PACKAGES" | tr -d ' ')
+    if [ -n "$pkgs_norm" ] && [ "$pkgs_norm" != "$DEFAULT_VENV_PACKAGES" ]; then
+        pkgs=""
+        OLD_IFS=$IFS; IFS=,
+        for p in $SEEDLING_VENV_DEFAULT_PACKAGES; do
+            p=$(printf '%s' "$p" | sed -e 's/^ *//' -e 's/ *$//')
+            [ -z "$p" ] && continue
+            [ -n "$pkgs" ] && pkgs="$pkgs, "
+            pkgs="$pkgs\"$(json_escape "$p")\""
+        done
+        IFS=$OLD_IFS
+        if [ -n "$pkgs" ]; then
+            [ -n "$entries" ] && entries="$entries,
+"
+            entries="$entries  \"venv_default_packages\": [$pkgs]"
+        fi
+    fi
+    if [ -n "$entries" ]; then
+        printf '{\n%s\n}\n' "$entries" > "$SETTINGS_FILE"
+        info "Seeded seedling settings from seedling.conf"
+    fi
 fi
 
 

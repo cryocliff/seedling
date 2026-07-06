@@ -10,19 +10,33 @@
 
 $ErrorActionPreference = "Stop"
 
-# Where seedling is cloned from when this script isn't run from inside a
-# local checkout. Can be overridden per-run without editing the file --
-# SEEDLING_REPO accepts a git URL or a plain directory path:
-#   $env:SEEDLING_REPO = "https://github.com/someone/fork.git"; .\install.ps1
-#   $env:SEEDLING_REPO = "S:\shared\seedling"; .\install.ps1
+# Built-in defaults. seedling.conf ships with these same values written
+# out, so a conf that still matches them changes nothing -- only edited
+# values have any effect. The baked-in copies exist for the piped
+# one-liner install, where no local seedling.conf exists yet to consult.
 $DefaultSeedlingRepo = "https://github.com/cryocliff/seedling.git"
-
-$SeedlingHome = if ($env:SEEDLING_HOME) { $env:SEEDLING_HOME } else { Join-Path $HOME "seedling" }
-$SeedlingRepo = if ($env:SEEDLING_REPO) { $env:SEEDLING_REPO } else { $DefaultSeedlingRepo }
+$DefaultVenvPackages = "ipython,ruff"
 
 function Info($msg)  { Write-Host "==> $msg" -ForegroundColor Green }
 function Warn($msg)  { Write-Host "!! $msg" -ForegroundColor Yellow }
 function Die($msg)   { Write-Host "error: $msg" -ForegroundColor Red; exit 1 }
+
+# seedling.conf is the deployment config: organizations distributing
+# seedling from their own git host or a network drive set the source (and
+# any install-time settings) there ONCE, and their users install with no
+# flags or env vars. Standard internet installs ship a conf whose values
+# match the baked-in defaults, so nothing changes for them.
+function Read-SeedlingConf($path) {
+    $conf = @{}
+    if ($path -and (Test-Path $path)) {
+        foreach ($line in Get-Content $path) {
+            if ($line -match '^\s*([A-Z_]+)\s*=\s*"([^"]*)"\s*$') {
+                $conf[$Matches[1]] = $Matches[2]
+            }
+        }
+    }
+    return $conf
+}
 
 # ---------------------------------------------------------------------------
 # 1. Locate the seedling source (local checkout next to this script, or clone)
@@ -38,6 +52,31 @@ if ($ScriptDir) {
     if (Test-Path (Join-Path $ScriptDir "pyproject.toml")) {
         $HasLocalCheckout = $true
     }
+}
+
+$Conf = if ($ScriptDir) { Read-SeedlingConf (Join-Path $ScriptDir "seedling.conf") } else { @{} }
+
+# Source resolution: SEEDLING_REPO env var (one-run override) beats
+# seedling.conf, which beats the baked-in default.
+$SeedlingRepo = if ($env:SEEDLING_REPO) {
+    $env:SEEDLING_REPO
+} elseif ($Conf["SEEDLING_REPO_URL"]) {
+    $Conf["SEEDLING_REPO_URL"]
+} else {
+    $DefaultSeedlingRepo
+}
+
+# Home resolution follows the same order. A leading "~" in the conf value
+# means the installing user's home directory.
+$SeedlingHome = if ($env:SEEDLING_HOME) {
+    $env:SEEDLING_HOME
+} elseif ($Conf["SEEDLING_HOME_DIR"]) {
+    $dir = $Conf["SEEDLING_HOME_DIR"]
+    if ($dir -eq "~") { $HOME }
+    elseif ($dir.StartsWith("~/") -or $dir.StartsWith("~\")) { Join-Path $HOME $dir.Substring(2) }
+    else { $dir }
+} else {
+    Join-Path $HOME "seedling"
 }
 
 $InstalledFromDir = $null
@@ -89,11 +128,43 @@ if ($CleanupOriginalSrc) {
     Remove-Item -Recurse -Force $OriginalSrc -ErrorAction SilentlyContinue
 }
 
-# When installing from a directory, remember it as the update source so
-# `seed update-commands` knows where to look for newer copies later.
+# ---------------------------------------------------------------------------
+# 2c. Seed seedling's settings from seedling.conf (first install only --
+#     an existing settings.json is never touched, so reinstalls don't
+#     clobber choices made later with `seed config set`).
+# ---------------------------------------------------------------------------
+# Piped installs have no local conf, but the clone we just copied does.
+if ($Conf.Count -eq 0) {
+    $Conf = Read-SeedlingConf (Join-Path $SrcDir "seedling.conf")
+}
+
+# `seed update-commands` should keep pulling from wherever this install
+# actually came from: a directory source, or any URL that isn't the public
+# default (self-hosted git). Public-default installs leave this unset and
+# update via the clone's own git remote, as always.
+$UpdateSourceSeed = $null
+if ($InstalledFromDir) {
+    $UpdateSourceSeed = $InstalledFromDir
+} elseif ($SeedlingRepo -ne $DefaultSeedlingRepo) {
+    $UpdateSourceSeed = $SeedlingRepo
+}
+
 $SettingsFile = Join-Path $SeedlingHome "system\config\settings.json"
-if ($InstalledFromDir -and -not (Test-Path $SettingsFile)) {
-    @{ update_source = "$InstalledFromDir" } | ConvertTo-Json | Set-Content -Path $SettingsFile -Encoding UTF8
+if (-not (Test-Path $SettingsFile)) {
+    $seed = @{}
+    if ($UpdateSourceSeed) { $seed["update_source"] = "$UpdateSourceSeed" }
+    # Only seed the package list when it was actually changed -- the conf
+    # ships with the built-in default written out for discoverability.
+    if ($Conf["SEEDLING_VENV_DEFAULT_PACKAGES"]) {
+        $pkgs = @($Conf["SEEDLING_VENV_DEFAULT_PACKAGES"].Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        if ($pkgs.Count -gt 0 -and (($pkgs -join ",") -ne $DefaultVenvPackages)) {
+            $seed["venv_default_packages"] = $pkgs
+        }
+    }
+    if ($seed.Count -gt 0) {
+        $seed | ConvertTo-Json | Set-Content -Path $SettingsFile -Encoding UTF8
+        Info "Seeded seedling settings from seedling.conf"
+    }
 }
 
 

@@ -14,7 +14,7 @@ import re
 import shutil
 from pathlib import Path
 
-from .. import colors, confirm, fsutil, paths, runlog
+from .. import colors, config, confirm, fsutil, paths, runlog
 from . import kill_cmd
 
 _BACKUP_NAME_RE = re.compile(r"^seedling-repo-backup(-\d+)?$")
@@ -25,6 +25,20 @@ _REINSTALL_LINES = [
     "  macOS/Linux:  curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh",
     "  PowerShell:   irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex",
 ]
+
+
+def _print_reinstall(update_source) -> None:
+    """The reinstall instructions. Installs configured with a custom
+    `update_source` (self-hosted git, network drive) came from somewhere the
+    public one-liners can't reach, so point at that source first."""
+    print("To reinstall seedling later:")
+    if update_source:
+        print(f"  from your configured source ({update_source}):")
+        print("    run the installer from inside it (install.sh / install.cmd), or pass")
+        print("    it to either installer as the SEEDLING_REPO environment variable")
+        print("  or from the public repo:")
+    for line in _REINSTALL_LINES:
+        print(line)
 
 _PARTIAL_REMOVE_LINES = [
     "  seed remove-venv <name>    delete one venv",
@@ -117,6 +131,9 @@ def run(args) -> int:
     home = paths.HOME
     keep_repos = getattr(args, "keep_repos", False)
     old_backups = [] if keep_repos else _existing_backups()
+    # Read this before anything is deleted -- it's needed for the reinstall
+    # instructions printed at the very end, when the config file is gone.
+    update_source = config.get("update_source")
 
     if confirm.preview_requested(args):
         items = []
@@ -169,9 +186,7 @@ def run(args) -> int:
             print(line)
         print()
 
-        print("If you go through with the purge, reinstall seedling later with:")
-        for line in _REINSTALL_LINES:
-            print(line)
+        _print_reinstall(update_source)
         print()
 
     if not confirm.confirm(args):
@@ -231,7 +246,5 @@ def run(args) -> int:
         print(f"Your cloned repos are safe at {repo_backup}.")
         print("Move them wherever you'd like -- seedling won't touch that folder again.")
     print()
-    print("To reinstall seedling later:")
-    for line in _REINSTALL_LINES:
-        print(line)
+    _print_reinstall(update_source)
     return 0

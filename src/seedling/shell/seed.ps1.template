@@ -8,6 +8,12 @@
 $script:SeedlingHome = "__SEEDLING_HOME_PLACEHOLDER__"
 $script:SeedlingCli = Join-Path $script:SeedlingHome "system\bin\seed-cli.exe"
 
+# seed-cli itself resolves the seedling home from this variable (falling
+# back to ~/seedling). Setting it here is what makes a custom
+# SEEDLING_HOME_DIR from seedling.conf work at runtime, not just at
+# install time. For default installs this is a no-op.
+$env:SEEDLING_HOME = $script:SeedlingHome
+
 function seed {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
