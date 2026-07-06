@@ -218,12 +218,21 @@ flags or environment variables for users to remember:
   new venv (default `ipython,ruff`).
 - `SEEDLING_AUTO_SETUP` — whether the install finishes by setting up the
   newest Python + auto-activated `dev` venv (default `yes`).
+- `SEEDLING_PYTHON_MIRROR` / `SEEDLING_PACKAGE_INDEX` — offline sources
+  for interpreters and packages: URLs, or plain directories on a network
+  share. Users never touch environment variables — the conf is applied
+  automatically at install time and on every command after.
 
 The install source is written into seedling's own settings on first
 install (visible via `seed config`), so updates keep flowing from the
 right place afterward. Per-run overrides still work without editing
 anything: `SEEDLING_REPO=<url-or-directory>` before running the installer,
 or `seed config set update_source <url-or-directory>` later.
+
+For a **fully offline network** (no internet at all), see
+📴 **[docs/OFFLINE.md](docs/OFFLINE.md)** — it lists every component
+seedling normally downloads (uv, Python interpreters, packages, git,
+VS Code) and exactly what to provide instead.
 
 ## Project layout (for contributors)
 

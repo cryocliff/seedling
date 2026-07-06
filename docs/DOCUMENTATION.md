@@ -14,6 +14,7 @@ For a shorter quickstart, see [README.md](README.md).
 ## Contents
 
 - [How installation works](#how-installation-works)
+- Running on an offline network -> see [OFFLINE.md](OFFLINE.md)
 - [The folder layout](#the-folder-layout)
 - [Why `seed` is a shell function](#why-seed-is-a-shell-function)
 - [Why deletion sometimes used to fail](#why-deletion-sometimes-used-to-fail)
@@ -87,6 +88,15 @@ or environment variables:
   for a bare install; the `SEEDLING_AUTO_SETUP` environment variable
   overrides for one run. Never fatal: if this step fails (e.g. offline),
   seedling itself is still installed and working.
+- `SEEDLING_PYTHON_MIRROR` (default: empty = internet) — where `seed
+  python` downloads interpreter builds: a URL of an internal mirror, or a
+  plain directory of python-build-standalone archives on a share. Seeds
+  the `python_mirror` setting.
+- `SEEDLING_PACKAGE_INDEX` (default: empty = pypi.org) — where packages
+  install from: an index URL, or a plain directory of wheels on a share
+  (the internet index is then disabled entirely). Seeds the
+  `package_index` setting. See [OFFLINE.md](OFFLINE.md) for the full
+  offline deployment guide.
 
 How it's applied: both installers read `seedling.conf` at the repo root
 (a piped install reads the copy inside the repo it just cloned). The
@@ -876,6 +886,9 @@ setting with its current value and an explanation. The keys:
   the existing copy.
 - `venv_default_packages` — the packages installed into every new venv
   (default: `ipython, ruff`). Takes comma-separated input.
+- `python_mirror` / `package_index` — offline sources for interpreters
+  and packages (a URL, or a plain directory on a share). Normally seeded
+  from `seedling.conf` at install time; see [OFFLINE.md](OFFLINE.md).
 
 `seed config get <key>` prints just the value (nothing at all when unset),
 so it's script-friendly. `unset` resets a key to its built-in default.

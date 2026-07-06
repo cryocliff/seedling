@@ -153,6 +153,19 @@ def _check_defaults() -> None:
               "reinstall the existing copy, not fetch newer versions; set one "
               "with `seed config set update_source <git-url-or-directory>`")
 
+    # Offline sources: a directory-path value that doesn't exist means the
+    # next `seed python`/`seed install` fails with an obscure uv error.
+    for key in ("python_mirror", "package_index"):
+        value = config.get(key)
+        if not value or "://" in str(value):
+            continue  # unset, or a URL we can't cheaply verify
+        if Path(str(value)).expanduser().is_dir():
+            _ok(f"{key} directory {value} exists")
+        else:
+            _fail(f"config {key} directory {value} doesn't exist -- installs "
+                  "that need it will fail; fix it or `seed config unset "
+                  f"{key}`")
+
 
 _HOOK_PATH_RE = re.compile(r'["\']([^"\']*seed\.(?:ps1|sh))["\']')
 

@@ -23,6 +23,16 @@ KNOWN_KEYS: dict[str, str] = {
     "venv_default_packages": (
         "Packages installed into every new venv (list). Skip per-venv with "
         "`seed venv <name> --no-default-packages`."),
+    "python_mirror": (
+        "Where `seed python` downloads interpreter builds from, instead of "
+        "the internet: a URL or a directory of python-build-standalone "
+        "archives (e.g. a network share). Applied to every uv call as "
+        "UV_PYTHON_INSTALL_MIRROR. Empty/null means the internet."),
+    "package_index": (
+        "Where packages install from, instead of pypi.org: an index URL "
+        "(Artifactory/Nexus/devpi), or a plain directory of wheels (e.g. a "
+        "network share -- becomes the one and only package source, with "
+        "the internet index disabled). Empty/null means pypi.org."),
 }
 
 _DEFAULTS: dict[str, Any] = {
@@ -30,6 +40,8 @@ _DEFAULTS: dict[str, Any] = {
     "default_venv": None,
     "update_source": None,
     "venv_default_packages": ["ipython", "ruff"],
+    "python_mirror": None,
+    "package_index": None,
 }
 
 
