@@ -19,6 +19,22 @@ from . import kill_cmd
 
 _BACKUP_NAME_RE = re.compile(r"^seedling-repo-backup(-\d+)?$")
 
+# Shown before confirming and again after a successful purge -- once `seed`
+# is gone, this screen is the last place the user will see these.
+_REINSTALL_LINES = [
+    "  macOS/Linux:  curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh",
+    "  PowerShell:   irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex",
+]
+
+_PARTIAL_REMOVE_LINES = [
+    "  seed remove-venv <name>    delete one venv",
+    "  seed remove-venvs          delete all venvs",
+    "  seed remove-python <tag>   delete a base Python and the venvs built from it",
+    "  seed remove-repo <name>    delete one cloned repo",
+    "  seed remove-user           delete everything under ~/seedling, but keep the",
+    "                             `seed` command hook so a reinstall picks right back up",
+]
+
 
 def _candidate_profiles() -> list[Path]:
     home = Path.home()
@@ -133,8 +149,10 @@ def run(args) -> int:
         print()
 
         if not keep_repos and _has_repos():
-            print(f"Note: {paths.REPO_DIR} has cloned repos in it. They'll be deleted "
-                  "along with everything else unless you re-run this with --keep-repos.")
+            print(colors.header("Want to keep your cloned repos?") +
+                  f" ({paths.REPO_DIR} has some.)")
+            print("Abort now and re-run as `seed purge --keep-repos` -- they get moved")
+            print(f"out to {Path.home() / 'seedling-repo-backup'} before everything else is deleted.")
             print()
 
         if old_backups:
@@ -144,6 +162,17 @@ def run(args) -> int:
             for p in old_backups:
                 print(f"  - {p}")
             print()
+
+        print(colors.header("Only need to remove part of seedling?") +
+              " There are smaller hammers:")
+        for line in _PARTIAL_REMOVE_LINES:
+            print(line)
+        print()
+
+        print("If you go through with the purge, reinstall seedling later with:")
+        for line in _REINSTALL_LINES:
+            print(line)
+        print()
 
     if not confirm.confirm(args):
         print("Aborted. Nothing was removed.")
@@ -201,4 +230,8 @@ def run(args) -> int:
         print()
         print(f"Your cloned repos are safe at {repo_backup}.")
         print("Move them wherever you'd like -- seedling won't touch that folder again.")
+    print()
+    print("To reinstall seedling later:")
+    for line in _REINSTALL_LINES:
+        print(line)
     return 0

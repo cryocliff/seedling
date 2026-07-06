@@ -46,13 +46,24 @@ def find_uv() -> Path:
     )
 
 
+def _build_env(env: dict | None) -> dict:
+    """The environment for every uv invocation. Redirects uv's download/
+    package cache into ~/seedling/system/cache/uv so it lives inside the
+    seedling folder like everything else, instead of uv's default
+    ~/.cache/uv or %LOCALAPPDATA%\\uv. setdefault means an explicit
+    UV_CACHE_DIR already in the user's environment still wins."""
+    full_env = os.environ.copy()
+    if env:
+        full_env.update(env)
+    full_env.setdefault("UV_CACHE_DIR", str(paths.UV_CACHE_DIR))
+    return full_env
+
+
 def run(args: list[str], *, env: dict | None = None, check: bool = True) -> subprocess.CompletedProcess:
     """Runs uv, streaming its combined stdout/stderr live with a `[uv]` tag
     on every line so it reads distinctly from seedling's own print()s."""
     uv = find_uv()
-    full_env = os.environ.copy()
-    if env:
-        full_env.update(env)
+    full_env = _build_env(env)
     cmd = [str(uv), *args]
     proc = subprocess.Popen(
         cmd, env=full_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -75,9 +86,7 @@ def run_captured(args: list[str], *, env: dict | None = None, check: bool = True
     "activate with: source .../activate" hint after `uv venv`, which doesn't
     match how `seed activate` actually works."""
     uv = find_uv()
-    full_env = os.environ.copy()
-    if env:
-        full_env.update(env)
+    full_env = _build_env(env)
     return subprocess.run(
         [str(uv), *args], env=full_env, check=check,
         capture_output=True, text=True,

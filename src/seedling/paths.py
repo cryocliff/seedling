@@ -13,6 +13,9 @@ scattered across the filesystem:
             settings.json <- seedling's own config (default python version, etc.)
         logs/             <- one log file per day; every `seed` command appends
                              what ran and everything it printed
+        cache/
+            uv/           <- uv's package/interpreter download cache, kept
+                             inside seedling instead of ~/.cache / %LOCALAPPDATA%
         shell/
             seed.sh       <- sourced by bash/zsh to define the `seed` function
             seed.ps1      <- dot-sourced by PowerShell to define the `seed` function
@@ -55,6 +58,7 @@ CONFIG_DIR = SYSTEM_DIR / "config"
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 SHELL_DIR = SYSTEM_DIR / "shell"
 LOGS_DIR = SYSTEM_DIR / "logs"
+UV_CACHE_DIR = SYSTEM_DIR / "cache" / "uv"
 
 PYTHON_DIR = HOME / "python"
 BASE_DIR = PYTHON_DIR / "base"
@@ -75,6 +79,7 @@ ALL_DIRS = [
     CONFIG_DIR,
     SHELL_DIR,
     LOGS_DIR,
+    UV_CACHE_DIR,
     PYTHON_DIR,
     BASE_DIR,
     VENVS_DIR,

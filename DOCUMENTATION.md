@@ -144,6 +144,9 @@ could actually work. On failure, this window is skipped and the original
 │   │   └── settings.json         seedling's own config -- see `seed config`
 │   ├── logs/
 │   │   └── seed-YYYY-MM-DD.log   every command + its output, one file per day
+│   ├── cache/
+│   │   └── uv/                   uv's package/interpreter download cache --
+│   │                             kept in here instead of ~/.cache / %LOCALAPPDATA%
 │   └── shell/
 │       ├── seed.sh                sourced by bash/zsh
 │       └── seed.ps1                dot-sourced by PowerShell
@@ -726,6 +729,14 @@ Without `--keep-repos`, any leftover `~/seedling-repo-backup*` folder from a
 repos this time," so leaving it off means you're saying you don't want
 them kept around at all, and stale backups from an earlier purge would
 otherwise just accumulate in your home directory forever.
+
+The interactive confirmation screen also points out the alternatives
+before you commit: how to preserve repos (`--keep-repos`), the smaller
+partial-removal commands (`remove-venv`, `remove-venvs`, `remove-python`,
+`remove-repo`, and `remove-user`, which keeps the shell hook), and the
+exact one-line commands to reinstall seedling afterward. The reinstall
+commands are printed again after a successful purge — that's the last
+output `seed` ever produces, so it's the last chance to see them.
 
 ```
 seed purge

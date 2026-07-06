@@ -1,13 +1,26 @@
 # seedling 🌱
 
-A tiny, opinionated wrapper around [`uv`](https://astral.sh/uv) that gets you
-from "nothing installed" to "writing Python" — with everything living in one
-tidy folder instead of scattered across your filesystem.
+**A clean implementation of Python tool management, for people who prefer
+organization.** Interpreters, venvs, editor, cloned repos, config, and logs
+all live in one tidy folder — `~/seedling` — instead of being scattered
+across your filesystem. Built on [`uv`](https://astral.sh/uv). Delete the
+folder and your machine is exactly as it was.
 
-📖 **[Full documentation](DOCUMENTATION.md)** covers every command and
-behavior in detail. This README is a quickstart.
+## Install
 
-Command name: **`seed`**
+Nothing needs to be pre-installed — not Python, not uv, nothing.
+
+**macOS / Linux:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex
+```
+
+Then open a new terminal and you're ready:
 
 ```
 seed python 312          # install a base Python interpreter
@@ -16,6 +29,9 @@ seed activate myproject   # activate it, right in your current shell
 seed vscode               # install (once) + open a self-contained VS Code
 seed remove-user          # wipe everything seedling has ever created
 ```
+
+📖 **[Full documentation](DOCUMENTATION.md)** covers every command and
+behavior in detail. This README is a quickstart. Command name: **`seed`**
 
 ## Everything lives in one place
 
@@ -27,6 +43,7 @@ seed remove-user          # wipe everything seedling has ever created
 │   ├── src/                    seedling's own source (see `seed update-commands`)
 │   ├── config/settings.json    seedling's own small config (see `seed config`)
 │   ├── logs/                   one log file per day -- every command + its output
+│   ├── cache/uv/               uv's download cache, kept in here too
 │   └── shell/                  the seed.sh / seed.ps1 your shell profile loads
 ├── python/
 │   ├── base/312/           `seed python 312`
@@ -42,27 +59,15 @@ Nothing is written to `%APPDATA%`, `~/.vscode`, `~/.local/share`, or any of
 the other places tools like this usually scatter files into. Deleting
 `~/seedling` (via `seed remove-user`) leaves your machine exactly as it was.
 
-## Install
+## Install details
 
-Nothing needs to be pre-installed — not Python, not uv, nothing. The
-installer bootstraps all of it, the same way `uv`'s own installer does.
-(One exception, unrelated to installing seedling itself: `seed clone-repo`
-needs git — auto-bootstrapped on Windows, needs to already be present on
-macOS/Linux. See [DOCUMENTATION.md](DOCUMENTATION.md) for why.)
+The one-liners at the top bootstrap everything, the same way `uv`'s own
+installer does — no git clone, no download, nothing to know in advance
+beyond that one URL. (One exception, unrelated to installing seedling
+itself: `seed clone-repo` needs git — auto-bootstrapped on Windows, needs
+to already be present on macOS/Linux. See
+[DOCUMENTATION.md](DOCUMENTATION.md) for why.)
 
-### One-line install
-
-**macOS / Linux:**
-```sh
-curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/install.sh | sh
-```
-
-**Windows (PowerShell):**
-```powershell
-irm https://raw.githubusercontent.com/cryocliff/seedling/main/install.ps1 | iex
-```
-
-No git clone, no download, nothing to know in advance beyond that one URL.
 The installers also support two other modes:
 
 - **Local checkout** — run `./install.sh` / `install.cmd` from inside a

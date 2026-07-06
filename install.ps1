@@ -118,6 +118,7 @@ if (-not (Test-Path $UvExe)) { Die "uv install appears to have failed (not found
 Info "Installing the seedling CLI ..."
 $env:UV_TOOL_DIR = "$SeedlingHome\system\tool"
 $env:UV_TOOL_BIN_DIR = "$SeedlingHome\system\bin"
+$env:UV_CACHE_DIR = "$SeedlingHome\system\cache\uv"
 & $UvExe tool install --force --reinstall $SrcDir
 
 $SeedCli = Join-Path $SeedlingHome "system\bin\seed-cli.exe"

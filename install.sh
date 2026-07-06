@@ -116,6 +116,7 @@ UV="$SEEDLING_HOME/system/bin/uv"
 # ---------------------------------------------------------------------------
 info "Installing the seedling CLI ..."
 env UV_TOOL_DIR="$SEEDLING_HOME/system/tool" UV_TOOL_BIN_DIR="$SEEDLING_HOME/system/bin" \
+    UV_CACHE_DIR="$SEEDLING_HOME/system/cache/uv" \
     "$UV" tool install --force --reinstall "$SRC_DIR"
 
 [ -x "$SEEDLING_HOME/system/bin/seed-cli" ] || die "seed-cli was not installed correctly."
