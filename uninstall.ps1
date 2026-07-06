@@ -2,11 +2,15 @@
 $ErrorActionPreference = "Stop"
 
 $SeedlingHome = if ($env:SEEDLING_HOME) { $env:SEEDLING_HOME } else { Join-Path $HOME "seedling" }
-$seedPs1 = Join-Path $SeedlingHome "system\shell\seed.ps1"
-$hookLine = ". `"$seedPs1`""
 
 if (Test-Path $PROFILE) {
-    $lines = Get-Content $PROFILE | Where-Object { $_ -ne $hookLine -and $_ -ne "# seedling" }
+    # Match any line sourcing a seed shell script from under the seedling
+    # home -- not just the exact current hook text -- so hooks written by
+    # older seedling layouts (e.g. ~\seedling\shell\ before it moved under
+    # system\) are cleaned up too instead of erroring in every new shell.
+    $lines = Get-Content $PROFILE | Where-Object {
+        -not ($_.Contains($SeedlingHome) -and ($_ -match "seed\.(ps1|sh)")) -and $_.Trim() -ne "# seedling"
+    }
     Set-Content -Path $PROFILE -Value $lines
     Write-Host "Removed seedling hook from $PROFILE"
 }

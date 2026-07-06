@@ -137,8 +137,18 @@ $hookLine = ". `"$seedPs1`""
 if (-not (Test-Path $PROFILE)) {
     New-Item -ItemType File -Force -Path $PROFILE | Out-Null
 }
-$existing = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
-if ($null -eq $existing -or -not $existing.Contains($hookLine)) {
+# Drop hook lines left by older seedling layouts (e.g. ~\seedling\shell\
+# before it moved under system\) before adding the current one, so a
+# reinstall never leaves a stale line erroring in every new shell.
+$lines = @(Get-Content $PROFILE -ErrorAction SilentlyContinue)
+$cleaned = @($lines | Where-Object {
+    -not ($_.Contains($SeedlingHome) -and ($_ -match "seed\.(ps1|sh)") -and $_ -ne $hookLine)
+})
+if ($cleaned.Count -ne $lines.Count) {
+    Set-Content -Path $PROFILE -Value $cleaned
+    Info "Removed stale seedling hook line(s) from $PROFILE"
+}
+if (-not ($cleaned -contains $hookLine)) {
     Add-Content -Path $PROFILE -Value "`n# seedling`n$hookLine"
     Info "Added seedling to $PROFILE"
 }

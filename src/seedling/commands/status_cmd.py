@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -149,8 +150,10 @@ def _check_defaults() -> None:
                 "not checked over the network)")
 
 
+_HOOK_PATH_RE = re.compile(r'["\']([^"\']*seed\.(?:ps1|sh))["\']')
+
+
 def _check_shell_hook() -> None:
-    marker = str(paths.SHELL_DIR)
     profiles = [
         Path.home() / ".zshrc",
         Path.home() / ".bashrc",
@@ -159,15 +162,36 @@ def _check_shell_hook() -> None:
         Path.home() / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1",
         Path.home() / "Documents" / "WindowsPowerShell" / "Microsoft.PowerShell_profile.ps1",
     ]
+    home_str = str(paths.HOME)
+    found_working = False
     for profile in profiles:
+        if not profile.exists():
+            continue
         try:
-            if profile.exists() and marker in profile.read_text():
-                _ok(f"shell hook installed in {profile}")
-                return
+            text = profile.read_text()
         except OSError:
             continue
-    _warn("no `seed` shell hook found in the usual shell profiles -- "
-          "`seed activate` won't affect your shell; re-run the installer if so")
+        for line in text.splitlines():
+            if home_str not in line:
+                continue
+            if "seed.ps1" not in line and "seed.sh" not in line:
+                continue
+            match = _HOOK_PATH_RE.search(line)
+            target = Path(match.group(1)) if match else None
+            if target is not None and target.exists():
+                found_working = True
+                _ok(f"shell hook installed in {profile}")
+            else:
+                # A hook pointing at a deleted file (e.g. left behind by an
+                # old seedling layout) makes every new shell print an error.
+                _warn(f"stale seedling hook in {profile}: `{line.strip()}` "
+                      "points at a file that doesn't exist -- every new "
+                      "shell will print an error until that line is removed "
+                      "(re-running the installer cleans it up)")
+    if not found_working:
+        _warn("no working `seed` shell hook found in the usual shell profiles "
+              "-- `seed activate` won't affect your shell; re-run the "
+              "installer if so")
 
 
 def _check_logs_writable() -> None:

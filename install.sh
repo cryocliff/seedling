@@ -132,6 +132,19 @@ HOOK_LINE=". \"$SEEDLING_HOME/system/shell/seed.sh\""
 add_hook() {
     profile="$1"
     [ -f "$profile" ] || touch "$profile"
+    # Drop hook lines left by older seedling layouts (e.g. ~/seedling/shell/
+    # before it moved under system/) before adding the current one, so a
+    # reinstall never leaves a stale line erroring in every new shell.
+    awk -v home="$SEEDLING_HOME" -v keep="$HOOK_LINE" '
+        index($0, home) && (index($0, "seed.sh") || index($0, "seed.ps1")) && $0 != keep { next }
+        { print }
+    ' "$profile" > "$profile.tmp"
+    if cmp -s "$profile" "$profile.tmp"; then
+        rm -f "$profile.tmp"
+    else
+        mv "$profile.tmp" "$profile"
+        info "Removed stale seedling hook line(s) from $profile"
+    fi
     if ! grep -qF "$HOOK_LINE" "$profile" 2>/dev/null; then
         {
             echo ""

@@ -35,6 +35,18 @@ def _candidate_profiles() -> list[Path]:
     return candidates
 
 
+def _is_hook_line(line: str) -> bool:
+    """Any line that dot-sources a seed shell script from under the seedling
+    home -- deliberately matching on the home dir plus the script name
+    rather than the exact current hook text, so hooks written by OLDER
+    seedling layouts (e.g. ~/seedling/shell/ before it moved under
+    system/) are cleaned up too. A stale survivor here means every new
+    shell greets the user with a 'file not found' error after a purge."""
+    if line.strip() == "# seedling":
+        return True
+    return str(paths.HOME) in line and ("seed.ps1" in line or "seed.sh" in line)
+
+
 def _strip_hook(profile: Path) -> bool:
     if not profile.exists():
         return False
@@ -43,11 +55,7 @@ def _strip_hook(profile: Path) -> bool:
     except OSError:
         return False
 
-    marker = str(paths.SHELL_DIR)
-    new_lines = [
-        line for line in lines
-        if marker not in line and line.strip() != "# seedling"
-    ]
+    new_lines = [line for line in lines if not _is_hook_line(line)]
 
     if new_lines == lines:
         return False

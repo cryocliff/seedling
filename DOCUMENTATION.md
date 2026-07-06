@@ -119,6 +119,16 @@ it:
   saves a local script file, so there's nothing for the policy to block.
 - Run manually: `powershell -ExecutionPolicy Bypass -File .\install.ps1`
 
+**After a successful `install.cmd` run**, it opens a brand-new, ordinary
+PowerShell window (profile loads normally, so `seed` is available right
+away) with a short welcome banner listing the first few commands to try,
+and leaves it open at an interactive prompt. This isn't just a convenience:
+`install.cmd` itself runs in plain `cmd.exe`, and even drives `install.ps1`
+with `-NoProfile`, so there's no window at any point in that original
+invocation where `seed` — a PowerShell function defined in `$PROFILE` —
+could actually work. On failure, this window is skipped and the original
+`cmd.exe` window instead pauses on the error so you can read it.
+
 ---
 
 ## The folder layout

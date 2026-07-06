@@ -86,6 +86,12 @@ execution-policy bypass already applied for just that one run — it does
 above sidesteps this issue entirely, since it never saves a local script
 file for the execution policy to block in the first place.
 
+Once the install succeeds, `install.cmd` opens a fresh PowerShell window
+for you with `seed` ready to use and a short reminder of the first few
+commands to try — since `install.cmd` itself runs in plain `cmd.exe`
+(and even the PowerShell it drives runs with `-NoProfile`), `seed` could
+never actually work in that original window no matter how it was launched.
+
 What the installer actually does:
 1. Clones seedling from GitHub (or uses your local checkout) into a temp
    location, then **copies it into `~/seedling/system/src`** — a private copy
