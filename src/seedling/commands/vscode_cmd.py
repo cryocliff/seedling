@@ -188,6 +188,13 @@ def install(force: bool = False) -> list[str] | None:
     except download.ChecksumMismatch as e:
         print(f"error: {e}")
         return None
+    except OSError as e:
+        # Clean failure instead of a traceback -- e.g. an offline network.
+        # (On offline deployments, pre-seed extensions/vscode instead; see
+        # docs/OFFLINE.md.)
+        print(f"error: VS Code could not be downloaded ({e}).")
+        tmp_archive.unlink(missing_ok=True)
+        return None
     _extract(tmp_archive, paths.VSCODE_APP_DIR, kind)
     tmp_archive.unlink(missing_ok=True)
 
@@ -240,6 +247,12 @@ def run(args) -> int:
     if cli is None:
         print("Could not find any way to launch VS Code after installing it.")
         return 1
+
+    if getattr(args, "no_open", False):
+        # Install-only mode, used by the installers' default setup: get VS
+        # Code onto disk without popping a window in the middle of install.
+        print("VS Code is installed and ready. Open it with:  seed vscode")
+        return 0
 
     open_path = getattr(args, "path", None) or str(Path.cwd())
     print(f"Opening VS Code -> {open_path}")

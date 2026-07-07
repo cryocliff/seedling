@@ -23,6 +23,7 @@ DEFAULT_VENV_PACKAGES="ipython,ruff"
 SEEDLING_REPO_FROM_ENV="${SEEDLING_REPO:-}"
 SEEDLING_HOME_FROM_ENV="${SEEDLING_HOME:-}"
 SEEDLING_AUTO_SETUP_FROM_ENV="${SEEDLING_AUTO_SETUP:-}"
+SEEDLING_AUTO_VSCODE_FROM_ENV="${SEEDLING_AUTO_VSCODE:-}"
 
 info()  { printf '\033[1;32m==>\033[0m %s\n' "$1"; }
 warn()  { printf '\033[1;33m!!\033[0m %s\n' "$1"; }
@@ -45,6 +46,7 @@ SEEDLING_REPO_URL=""
 SEEDLING_HOME_DIR=""
 SEEDLING_VENV_DEFAULT_PACKAGES=""
 SEEDLING_AUTO_SETUP=""
+SEEDLING_AUTO_VSCODE=""
 SEEDLING_PYTHON_MIRROR=""
 SEEDLING_PACKAGE_INDEX=""
 CONF_FILE=""
@@ -337,6 +339,28 @@ case "$AUTO_SETUP" in
                 warn "Set it up later with:  seed python && seed venv dev && seed config set default_venv dev"
             fi
         fi
+
+        # VS Code too, so `seed vscode` opens instantly instead of
+        # downloading on first use. Idempotent (skips if already present)
+        # and never fatal.
+        if [ -n "$SEEDLING_AUTO_VSCODE_FROM_ENV" ]; then
+            AUTO_VSCODE="$SEEDLING_AUTO_VSCODE_FROM_ENV"
+        elif [ -n "$SEEDLING_AUTO_VSCODE" ]; then
+            AUTO_VSCODE="$SEEDLING_AUTO_VSCODE"
+        else
+            AUTO_VSCODE="yes"
+        fi
+        case "$AUTO_VSCODE" in
+            no|NO|No|0|false|FALSE)
+                info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AUTO_VSCODE)."
+                ;;
+            *)
+                info "Setting up VS Code ..."
+                if ! env SEEDLING_HOME="$SEEDLING_HOME" "$SEED_CLI" vscode --no-open; then
+                    warn "VS Code setup didn't finish (network problem?). Install it later with:  seed vscode"
+                fi
+                ;;
+        esac
         ;;
 esac
 

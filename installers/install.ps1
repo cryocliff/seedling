@@ -283,25 +283,47 @@ $AutoSetup = if ($env:SEEDLING_AUTO_SETUP) {
 $DevReady = $false
 if (@("no", "0", "false") -contains $AutoSetup.ToLower()) {
     Info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AutoSetup)."
-} elseif (Test-Path (Join-Path $SeedlingHome "python\venvs\dev")) {
-    Info "Default 'dev' venv already exists, leaving it as-is."
-    $DevReady = $true
 } else {
-    Info "Setting up the default environment: newest Python + a 'dev' venv ..."
-    $env:SEEDLING_HOME = $SeedlingHome
-    & $SeedCli python
-    if ($LASTEXITCODE -eq 0) { & $SeedCli venv dev }
-    if ($LASTEXITCODE -eq 0) {
-        # Make 'dev' the venv new shells auto-activate -- unless the user
-        # already chose one (reinstall case).
-        $env:SEEDLING_NO_LOG = "1"
-        $existingDefault = & $SeedCli config get default_venv
-        Remove-Item Env:SEEDLING_NO_LOG -ErrorAction SilentlyContinue
-        if (-not $existingDefault) { & $SeedCli config set default_venv dev }
+    if (Test-Path (Join-Path $SeedlingHome "python\venvs\dev")) {
+        Info "Default 'dev' venv already exists, leaving it as-is."
         $DevReady = $true
     } else {
-        Warn "Default environment setup didn't finish (network problem?)."
-        Warn "Set it up later with:  seed python; seed venv dev; seed config set default_venv dev"
+        Info "Setting up the default environment: newest Python + a 'dev' venv ..."
+        $env:SEEDLING_HOME = $SeedlingHome
+        & $SeedCli python
+        if ($LASTEXITCODE -eq 0) { & $SeedCli venv dev }
+        if ($LASTEXITCODE -eq 0) {
+            # Make 'dev' the venv new shells auto-activate -- unless the user
+            # already chose one (reinstall case).
+            $env:SEEDLING_NO_LOG = "1"
+            $existingDefault = & $SeedCli config get default_venv
+            Remove-Item Env:SEEDLING_NO_LOG -ErrorAction SilentlyContinue
+            if (-not $existingDefault) { & $SeedCli config set default_venv dev }
+            $DevReady = $true
+        } else {
+            Warn "Default environment setup didn't finish (network problem?)."
+            Warn "Set it up later with:  seed python; seed venv dev; seed config set default_venv dev"
+        }
+    }
+
+    # VS Code too, so `seed vscode` opens instantly instead of downloading
+    # on first use. Idempotent (skips if already present) and never fatal.
+    $AutoVscode = if ($env:SEEDLING_AUTO_VSCODE) {
+        $env:SEEDLING_AUTO_VSCODE
+    } elseif ($Conf["SEEDLING_AUTO_VSCODE"]) {
+        $Conf["SEEDLING_AUTO_VSCODE"]
+    } else {
+        "yes"
+    }
+    if (@("no", "0", "false") -contains $AutoVscode.ToLower()) {
+        Info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AutoVscode)."
+    } else {
+        Info "Setting up VS Code ..."
+        $env:SEEDLING_HOME = $SeedlingHome
+        & $SeedCli vscode --no-open
+        if ($LASTEXITCODE -ne 0) {
+            Warn "VS Code setup didn't finish (network problem?). Install it later with:  seed vscode"
+        }
     }
 }
 

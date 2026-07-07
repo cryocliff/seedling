@@ -88,6 +88,10 @@ or environment variables:
   for a bare install; the `SEEDLING_AUTO_SETUP` environment variable
   overrides for one run. Never fatal: if this step fails (e.g. offline),
   seedling itself is still installed and working.
+- `SEEDLING_AUTO_VSCODE` (default: `yes`) — also download and set up the
+  portable VS Code during install, so `seed vscode` opens instantly
+  instead of downloading ~130 MB on first use. Only applies when
+  `SEEDLING_AUTO_SETUP` is `yes`.
 - `SEEDLING_PYTHON_MIRROR` (default: empty = internet) — where `seed
   python` downloads interpreter builds: a URL of an internal mirror, or a
   plain directory of python-build-standalone archives on a share. Seeds
@@ -159,6 +163,8 @@ $env:SEEDLING_REPO = "S:\shared\seedling"; .\install.cmd
    the newest stable Python, creates a `dev` venv with the default
    packages, and records `dev` as the `default_venv` that new shells
    auto-activate — unless a different `default_venv` was already chosen.
+   Also downloads the portable VS Code (unless `SEEDLING_AUTO_VSCODE` is
+   `no`, or it's already present) so `seed vscode` opens instantly.
 7. **Writes the shell integration.** Copies `seed.sh.template` /
    `seed.ps1.template` into `~/seedling/system/shell/seed.sh` (or `.ps1`),
    with the real `~/seedling` path substituted in, then appends a line to

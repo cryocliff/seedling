@@ -164,6 +164,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_vscode.add_argument("path", nargs="?", help="Path to open (defaults to cwd)")
     p_vscode.add_argument("--reinstall", action="store_true",
                            help="Force a fresh VS Code install")
+    p_vscode.add_argument("--no-open", dest="no_open", action="store_true",
+                           help="Install (if needed) without opening a window "
+                                "(used by the installer's default setup)")
 
     p_clone_repo = sub.add_parser(
         "clone-repo", help="Clone a git repo into ~/seedling/repo")

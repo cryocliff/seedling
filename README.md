@@ -20,16 +20,16 @@ curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/
 irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.ps1 | iex
 ```
 
-The install also sets up the **newest stable Python** and a **`dev` venv**
-(with `ipython` + `ruff`) that auto-activates in every new shell — so open
-a new terminal and you're immediately ready:
+The install also sets up the **newest stable Python**, a **`dev` venv**
+(with `ipython` + `ruff`) that auto-activates in every new shell, and the
+**portable VS Code** — so open a new terminal and you're immediately ready:
 
 ```
 python                    # the newest Python, in the dev venv, ready to go
 seed install <package>    # add packages to it
 seed python 312           # install another interpreter version
 seed venv myproject       # create another venv
-seed vscode               # install (once) + open a self-contained VS Code
+seed vscode               # open the bundled, self-contained VS Code
 seed remove-user          # wipe everything seedling has ever created
 ```
 
@@ -114,8 +114,10 @@ What the installer actually does:
 3. Uses that `uv` to install `~/seedling/system/src` itself as an isolated tool
    (uv will fetch a private Python for this automatically if needed — you
    still never have to have Python pre-installed).
-4. Sets up the default environment — newest stable Python + the
-   auto-activated `dev` venv — unless `SEEDLING_AUTO_SETUP=no`.
+4. Sets up the default environment — newest stable Python, the
+   auto-activated `dev` venv, and the portable VS Code — unless
+   `SEEDLING_AUTO_SETUP=no` (or `SEEDLING_AUTO_VSCODE=no` for just
+   VS Code).
 5. Writes `seed.sh` / `seed.ps1` — a **shell function**, not just a binary —
    and hooks it into your shell profile.
 
@@ -219,6 +221,8 @@ flags or environment variables for users to remember:
   new venv (default `ipython,ruff`).
 - `SEEDLING_AUTO_SETUP` — whether the install finishes by setting up the
   newest Python + auto-activated `dev` venv (default `yes`).
+- `SEEDLING_AUTO_VSCODE` — whether the install also downloads the portable
+  VS Code up front (default `yes`; it's the largest download).
 - `SEEDLING_PYTHON_MIRROR` / `SEEDLING_PACKAGE_INDEX` — offline sources
   for interpreters and packages: URLs, or plain directories on a network
   share. Users never touch environment variables — the conf is applied

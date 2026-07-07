@@ -182,8 +182,9 @@ marketplace website on a connected machine.
 A standard install ends by installing the newest Python and creating the
 auto-activated `dev` venv. Offline, this works **only if #3 and #4 are in
 place** (it needs an interpreter archive and the `ipython`/`ruff`
-packages). If they aren't ready yet, set `SEEDLING_AUTO_SETUP="no"` in your
-distributed `seedling.conf` — the install then finishes bare but working,
+packages), and the VS Code part only works pre-seeded (#6) — otherwise set
+`SEEDLING_AUTO_VSCODE="no"` alongside it. If none of it is ready yet, set
+`SEEDLING_AUTO_SETUP="no"` in your distributed `seedling.conf` — the install then finishes bare but working,
 and the setup can be run later per-machine:
 
 ```
