@@ -131,7 +131,7 @@ command. The index/directory must contain at minimum:
 - **`hatchling`** (and its dependencies `packaging`, `pathspec`,
   `pluggy`, `trove-classifiers`) — uv needs it to **build seed-cli from
   source** during install and every `seed update-commands`.
-- **`ipython` and `ruff`** (and their dependencies) — the default packages
+- **the default venv packages** (`ipython`, `ruff`, `ipykernel`, `pip`, and their dependencies)
   for every new venv. If your organization prefers a different set, change
   `SEEDLING_VENV_DEFAULT_PACKAGES` in `seedling.conf` and stock those
   instead.
@@ -204,7 +204,7 @@ On a connected machine:
 S:\tools\seedling\                     <- a copy of this repo
 S:\tools\seedling\vendor\uv.exe        <- pinned uv binary
 S:\tools\python-builds\                <- python-build-standalone archives
-S:\tools\wheels\                       <- wheels: hatchling, ipython, ruff, + your org's packages
+S:\tools\wheels\                       <- wheels: hatchling + the default venv packages + your org's packages
 S:\tools\vscode-image\                 <- (optional) pre-seeded extensions\vscode folder
 S:\tools\install-offline.cmd           <- copies vendor\uv.exe into place, then calls install.cmd
 ```
@@ -236,7 +236,7 @@ equivalent:
 |---|---|
 | seedling source + updates | Already file-based (#1) — the ideal case |
 | Python interpreter mirror | `SEEDLING_PYTHON_MIRROR="S:\tools\python-builds"` — a share folder of archives; seedling handles the `file://` conversion |
-| Package index | `SEEDLING_PACKAGE_INDEX="S:\tools\wheels"` — a **directory of wheels** on the share; the internet index is disabled automatically. Populate it on a connected machine with `pip download -d` (include `hatchling`, `ipython`, `ruff`, and all transitive deps for your platform) |
+| Package index | `SEEDLING_PACKAGE_INDEX="S:\tools\wheels"` — a **directory of wheels** on the share; the internet index is disabled automatically. Populate it on a connected machine with `pip download -d` (include `hatchling`, the default venv packages, and all transitive deps for your platform) |
 | git hosting | git needs no server: **bare repositories on the share** (`git init --bare S:/repos/project.git`) are full remotes — `seed clone-repo S:/repos/project.git`, push, and pull all work over git's file protocol |
 | VS Code | Pre-seeded portable folder, as above (#6) |
 

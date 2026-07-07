@@ -17,7 +17,7 @@ For a shorter quickstart, see [README.md](README.md).
 - Running on an offline network -> see [OFFLINE.md](OFFLINE.md)
 - [The folder layout](#the-folder-layout)
 - [Why `seed` is a shell function](#why-seed-is-a-shell-function)
-- [Why deletion sometimes used to fail](#why-deletion-sometimes-used-to-fail)
+- [Why deletion is so defensive](#why-deletion-is-so-defensive)
 - [Help output & color](#help-output--color)
 - [Command logging](#command-logging)
 - [Non-interactive mode & previews](#non-interactive-mode--previews)
@@ -98,7 +98,7 @@ or environment variables:
   seedling manages lives in. A leading `~` means the installing user's
   home directory. The shell integration exports `SEEDLING_HOME` so
   seed-cli finds a custom location at runtime too.
-- `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff`) —
+- `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff,ipykernel,pip`) —
   comma-separated packages installed into every new venv (seeds the
   `venv_default_packages` setting).
 - `SEEDLING_AUTO_SETUP` (default: `yes`) — after installing seedling
@@ -287,7 +287,7 @@ PowerShell function, not just a path to a binary:
   prompt pointing at a folder that's gone.
 - After `seed purge`/`seed remove-user`, the function also waits for the
   invisible self-deletion helper and prints the final confirmation — see
-  [Why deletion sometimes used to fail](#why-deletion-sometimes-used-to-fail).
+  [Why deletion is so defensive](#why-deletion-is-so-defensive).
 - Every other subcommand is forwarded straight through to the real
   `seed-cli` binary as a normal subprocess.
 
@@ -298,12 +298,12 @@ shell function, since a subprocess has no way to affect your shell.
 
 ---
 
-## Why deletion sometimes used to fail
+## Why deletion is so defensive
 
 Every command that deletes a directory (`remove-venv(s)`, `remove-python`,
 `remove-repo`, `remove-user`, `purge`) routes through a shared helper
 (`robust_rmtree`) that works around four real causes of "file in use" /
-permission-denied failures, rather than the older behavior of just calling
+permission-denied failures, rather than just calling
 `shutil.rmtree(path, ignore_errors=True)` and hoping:
 
 1. **The calling process's own working directory being inside the folder
@@ -319,9 +319,9 @@ permission-denied failures, rather than the older behavior of just calling
    times with a short delay instead of failing on the first pass.
 3. **Read-only files.** Windows refuses to delete them outright, and git
    marks every file under `.git/objects` read-only — so any tree holding a
-   git checkout (every cloned repo, and seedling's own source copy) used
-   to fail on hundreds of files at once. The fix clears the read-only bit
-   and retries each failed file individually.
+   git checkout (every cloned repo) would otherwise fail on hundreds of
+   files at once. The error handler clears the read-only bit and retries
+   each failed file individually.
 4. **A program can't delete its own running executable.** `seed purge` and
    `seed remove-user` run *as* `seed-cli.exe` (plus the tool venv's
    `python.exe` underneath it), which live inside the very tree being
@@ -477,7 +477,7 @@ seed remove-python 311
 
 Creates a virtual environment at `~/seedling/python/venvs/<name>` via
 `uv venv --python <interpreter>`, then installs the default packages
-(`ipython` and `ruff`, unless changed via
+(`ipython`, `ruff`, `ipykernel`, and `pip`, unless changed via
 `seed config set venv_default_packages ...`) into it.
 
 - `--python <tag>` selects which installed base Python to build from
@@ -611,7 +611,7 @@ Prompts for confirmation unless `-y`/`--yes`.
 
 Deletion itself uses a retrying, defensive helper shared by every
 `remove-*`/`purge` command — see
-[Why deletion sometimes used to fail](#why-deletion-sometimes-used-to-fail)
+[Why deletion is so defensive](#why-deletion-is-so-defensive)
 for the bug this fixes and how.
 
 ```
@@ -629,11 +629,14 @@ asking for confirmation (skippable with `-y`).
 seed remove-venvs
 ```
 
-### `seed vscode [path] [--reinstall]`
+### `seed vscode [path] [--reinstall] [--no-open]`
 
-Installs (once) a fully portable copy of VS Code into
-`~/seedling/extensions/vscode/app`, then opens it at `path` (defaults to
-the current directory).
+Opens VS Code at `path` (defaults to the current directory), installing a
+fully portable copy into `~/seedling/extensions/vscode/app` first if none
+exists — though a default install already did that up front (see
+`SEEDLING_AUTO_VSCODE` in `seedling.conf`), so normally this just opens.
+`--no-open` installs/verifies without opening a window (what the
+installer's default setup uses).
 
 - **Portable mode:** a `data/` folder is created next to the VS Code
   executable, which makes VS Code keep all settings, extension installs,
@@ -915,8 +918,12 @@ The health check. Verifies each moving part and prints one `OK` / `WARN` /
 `FAIL` line per check: uv actually runs, git is available, the config file
 parses, every base Python alias resolves to a real interpreter, every venv
 has its interpreter and its base Python still exists, the configured
-defaults point at things that exist, the `seed` shell hook is installed,
-and the log directory is writable.
+defaults (`default_base`, `default_venv`) point at things that exist, an
+`update_source` is recorded (and, for a directory source, looks like a
+seedling tree), any offline `python_mirror`/`package_index` directories
+exist, the `seed` shell hook is installed and not stale (a hook line
+pointing at a deleted file gets a loud warning), and the log directory is
+writable.
 
 `FAIL` means a core operation would not work right now and makes the
 command exit 1 (useful in scripts/CI); `WARN` is informational (nothing
@@ -944,7 +951,7 @@ setting with its current value and an explanation. The keys:
   automatically at install time; unset means updates can only reinstall
   the existing copy.
 - `venv_default_packages` — the packages installed into every new venv
-  (default: `ipython, ruff`). Takes comma-separated input.
+  (default: `ipython, ruff, ipykernel, pip`). Takes comma-separated input.
 - `python_mirror` / `package_index` — offline sources for interpreters
   and packages (a URL, or a plain directory on a share). Normally seeded
   from `seedling.conf` at install time; see [OFFLINE.md](OFFLINE.md).
@@ -1021,13 +1028,9 @@ automatically, so machines on networks without github.com stay updatable.
 system"** — see [Windows execution policy](#windows-execution-policy).
 
 **`iex : Cannot bind argument to parameter 'Path' because it is null`**
-when running the `irm ... | iex` one-liner — this was a real bug (fixed):
-`install.ps1` used `$MyInvocation.MyCommand.Path` to detect a local
-checkout, which is `$null` when the script has no backing file (exactly
-the case for anything piped into `iex`), and `Split-Path` throws on a null
-argument rather than returning something falsy. `install.ps1` now guards
-against this explicitly, so this shouldn't happen anymore — if it does,
-you're running a stale cached copy of the script rather than a current one.
+when running the `irm ... | iex` one-liner — you're running a stale cached
+copy of the install script; re-fetch it (or download the repo and run
+`install.cmd` instead).
 
 **`seed: command not found` after installing** — open a new terminal (the
 shell hook only takes effect in new shells), or manually run
@@ -1052,13 +1055,6 @@ Windows this shouldn't happen — seedling downloads a portable copy
 automatically — but if it does (e.g. GitHub API rate-limiting), the error
 message includes a manual download link and the exact folder to extract it
 into.
-
-**`seed vscode` repeatedly opens new windows and/or floods the terminal with
-VS Code logs, and extensions never actually get installed** — this was a
-real bug (fixed): extension installation was calling the raw Electron GUI
-binary directly instead of VS Code's CLI script, which opens a window per
-extension instead of installing headlessly. If you're still hitting this,
-run `seed update-commands` to pick up the fix, then `seed vscode --reinstall`.
 
 ---
 

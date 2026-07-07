@@ -21,7 +21,7 @@ irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install
 ```
 
 The install also sets up the **newest stable Python**, a **`dev` venv**
-(with `ipython` + `ruff`) that auto-activates in every new shell, and the
+(with `ipython`, `ruff`, `ipykernel`, and `pip`) that auto-activates in every new shell, and the
 **portable VS Code** — so open a new terminal and you're immediately ready:
 
 ```
@@ -142,7 +142,7 @@ and forwards every other command straight to the real CLI binary,
 | `seed python [ver]` | Installs a base interpreter, e.g. `seed python 312` → `~/seedling/python/base/312`. Accepts `312`, `3.12`, or `3.12.4` — or no version at all for the newest stable Python. |
 | `seed list-python` | Lists every base Python installed, and which one is the default for `seed venv`. |
 | `seed remove-python <tag> [-y]` | Deletes a base Python **and** any venvs that were built from it. |
-| `seed venv <name>` | Creates a venv at `~/seedling/python/venvs/<name>` via `uv venv`, off the base Python (the first one you installed, or pass `--python <tag>`). Installs `ipython` + `ruff` into it by default — skip with `--no-default-packages`, or change the list with `seed config set venv_default_packages ...`. |
+| `seed venv <name>` | Creates a venv at `~/seedling/python/venvs/<name>` via `uv venv`, off the base Python (the first one you installed, or pass `--python <tag>`). Installs the default packages (`ipython`, `ruff`, `ipykernel`, `pip`) into it — skip with `--no-default-packages`, or change the list with `seed config set venv_default_packages ...`. |
 | `seed list-venvs` | Lists every venv, its Python version, and which one (if any) is currently active. |
 | `seed activate <name>` | Activates that venv in your current shell. |
 | `seed deactivate` | Deactivates the current venv in your current shell (runs the `deactivate` function venv's own activation script defines). |
@@ -222,7 +222,7 @@ flags or environment variables for users to remember:
 - `SEEDLING_HOME_DIR` — the folder everything seedling manages lives in
   (default `~/seedling`).
 - `SEEDLING_VENV_DEFAULT_PACKAGES` — the packages preinstalled into every
-  new venv (default `ipython,ruff`).
+  new venv (default `ipython,ruff,ipykernel,pip`).
 - `SEEDLING_AUTO_SETUP` — whether the install finishes by setting up the
   newest Python + auto-activated `dev` venv (default `yes`).
 - `SEEDLING_AUTO_VSCODE` — whether the install also downloads the portable

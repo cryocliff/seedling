@@ -39,7 +39,7 @@ _DEFAULTS: dict[str, Any] = {
     "default_base": None,
     "default_venv": None,
     "update_source": None,
-    "venv_default_packages": ["ipython", "ruff"],
+    "venv_default_packages": ["ipython", "ruff", "ipykernel", "pip"],
     "python_mirror": None,
     "package_index": None,
 }

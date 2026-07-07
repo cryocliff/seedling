@@ -18,7 +18,7 @@ set -eu
 # values have any effect. The baked-in copies exist for the piped
 # one-liner install, where no local seedling.conf exists yet to consult.
 DEFAULT_SEEDLING_REPO="https://github.com/cryocliff/seedling.git"
-DEFAULT_VENV_PACKAGES="ipython,ruff"
+DEFAULT_VENV_PACKAGES="ipython,ruff,ipykernel,pip"
 
 SEEDLING_REPO_FROM_ENV="${SEEDLING_REPO:-}"
 SEEDLING_HOME_FROM_ENV="${SEEDLING_HOME:-}"

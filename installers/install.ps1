@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 # values have any effect. The baked-in copies exist for the piped
 # one-liner install, where no local seedling.conf exists yet to consult.
 $DefaultSeedlingRepo = "https://github.com/cryocliff/seedling.git"
-$DefaultVenvPackages = "ipython,ruff"
+$DefaultVenvPackages = "ipython,ruff,ipykernel,pip"
 
 function Info($msg)  { Write-Host "==> $msg" -ForegroundColor Green }
 function Warn($msg)  { Write-Host "!! $msg" -ForegroundColor Yellow }
