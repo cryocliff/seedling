@@ -74,15 +74,19 @@ itself: `seed clone-repo` needs git — auto-bootstrapped on Windows, needs
 to already be present on macOS/Linux. See
 [DOCUMENTATION.md](docs/DOCUMENTATION.md) for why.)
 
-The installers also support two other modes:
+The one-liners are origin #1 of **four ways to install** (each recorded so
+updates and reinstalls keep flowing from the same place — see
+[the full documentation](docs/DOCUMENTATION.md#the-four-ways-to-install)):
 
-- **Local checkout** — run `install.cmd` (Windows, double-click works) or
-  `sh ./install.cmd` (macOS/Linux) from inside a copy of this repo (e.g. an
-  unzipped download). No GitHub access needed at all for this mode.
-- **A different source, for one run** — `SEEDLING_REPO=<git-url-or-directory>`
-  (bash) or `$env:SEEDLING_REPO = "<git-url-or-directory>"` (PowerShell)
-  before running the installer: a fork, a self-hosted git remote, or a plain
-  directory such as a network drive holding a copy of this repo.
+1. **Public GitHub** — the one-liners above.
+2. **Local checkout** — run `install.cmd` (Windows, double-click works) or
+   `sh ./install.cmd` (macOS/Linux) from inside a copy of this repo (e.g.
+   an unzipped download). No GitHub access needed at all.
+3. **Directory / network share** — a folder holding a copy of this repo
+   (set `SEEDLING_REPO_URL` in `seedling.conf`, or
+   `SEEDLING_REPO=<directory>` for one run).
+4. **Self-hosted git** — a GitHub Enterprise / GitLab / fork URL, the same
+   two ways.
 
 ### Windows execution policy
 

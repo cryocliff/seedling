@@ -20,25 +20,43 @@ from . import kill_cmd
 _BACKUP_NAME_RE = re.compile(r"^seedling-repo-backup(-\d+)?$")
 
 # Shown before confirming and again after a successful purge -- once `seed`
-# is gone, this screen is the last place the user will see these.
-_REINSTALL_LINES = [
+# is gone, this screen is the last place the user will see these. Must
+# match the installers' baked-in default so a public-GitHub install is
+# recognized as such.
+_PUBLIC_REPO = "https://github.com/cryocliff/seedling.git"
+
+_PUBLIC_REINSTALL_LINES = [
     "  macOS/Linux:  curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.sh | sh",
     "  PowerShell:   irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.ps1 | iex",
 ]
 
 
 def _print_reinstall(update_source) -> None:
-    """The reinstall instructions. Installs configured with a custom
-    `update_source` (self-hosted git, network drive) came from somewhere the
-    public one-liners can't reach, so point at that source first."""
+    """Reinstall instructions matched to how THIS copy was installed
+    (recorded as `update_source` at install time): the public one-liners
+    only fit a public-GitHub install; a network-share install reinstalls
+    from the share, and a self-hosted-git install by cloning that URL --
+    pointing those users at github.com would be wrong (and, on an isolated
+    network, impossible)."""
     print("To reinstall seedling later:")
-    if update_source:
-        print(f"  from your configured source ({update_source}):")
-        print("    run install.cmd from inside it (`sh install.cmd` on macOS/Linux), or")
-        print("    pass it to the installer as the SEEDLING_REPO environment variable")
-        print("  or from the public repo:")
-    for line in _REINSTALL_LINES:
-        print(line)
+    source = str(update_source) if update_source else ""
+
+    if not source or source == _PUBLIC_REPO:
+        for line in _PUBLIC_REINSTALL_LINES:
+            print(line)
+        return
+
+    is_url = "://" in source or source.startswith("git@")
+    if is_url:
+        print(f"  this copy was installed from {source} -- clone it and run the installer:")
+        print(f'    git clone "{source}" seedling')
+        print("    then, inside the clone:  install.cmd   (Windows)")
+        print("                             sh ./install.cmd   (macOS/Linux)")
+    else:
+        sep = "\\" if ("\\" in source or re.match(r"^[A-Za-z]:", source)) else "/"
+        print(f"  this copy was installed from {source} -- run the installer there again:")
+        print(f"    Windows:      {source}{sep}install.cmd   (double-clicking it also works)")
+        print(f"    macOS/Linux:  sh {source}{sep}install.cmd")
 
 _PARTIAL_REMOVE_LINES = [
     "  seed remove-venv <name>    delete one venv",

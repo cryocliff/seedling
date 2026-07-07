@@ -39,6 +39,25 @@ rather than a local checkout; see below). Separately, `seed clone-repo`
 on Windows, seedling downloads a portable copy automatically if none is
 found; see [`seed clone-repo`](#seed-clone-repo-git-url) for details.
 
+### The four ways to install
+
+There are four install origins. Whichever one is used gets recorded as the
+`update_source` setting, so `seed update-commands` keeps fetching from the
+right place afterward — and `seed purge`'s "to reinstall later" message
+matches it too:
+
+| # | Origin | How you install | Recorded as `update_source` | Reinstall later by |
+|---|--------|-----------------|------------------------------|--------------------|
+| 1 | **Public GitHub** | The `curl`/`irm` one-liners below | The public repo URL | The same one-liners |
+| 2 | **Local checkout** | Run `install.cmd` from inside a downloaded/cloned copy of this repo | The checkout's own `origin` remote (or the resolved default) | Running `install.cmd` in a checkout again |
+| 3 | **Directory / network share** | `seedling.conf`'s `SEEDLING_REPO_URL` (or the `SEEDLING_REPO` env var) set to a folder holding a copy of this repo | That directory | Running `install.cmd` on the share again |
+| 4 | **Self-hosted git** | `seedling.conf`'s `SEEDLING_REPO_URL` (or `SEEDLING_REPO`) set to a git URL (GitHub Enterprise, GitLab, a fork...) | That URL | `git clone <url>` + `install.cmd` inside the clone |
+
+Origins 3 and 4 are the organization-deployment story: edit
+[`seedling.conf`](#deployment-configuration-seedlingconf) once in the copy
+you distribute, and users install with no flags at all. The sections below
+cover each mechanism in detail.
+
 ### One-line install
 
 ```sh
@@ -841,9 +860,12 @@ The interactive confirmation screen also points out the alternatives
 before you commit: how to preserve repos (`--keep-repos`), the smaller
 partial-removal commands (`remove-venv`, `remove-venvs`, `remove-python`,
 `remove-repo`, and `remove-user`, which keeps the shell hook), and the
-exact one-line commands to reinstall seedling afterward. The reinstall
-commands are printed again after a successful purge — that's the last
-output `seed` ever produces, so it's the last chance to see them.
+reinstall instructions matched to how this copy was installed: the
+public one-liners for a github.com install, "run the installer on the
+share again" for a network-drive install, or "clone this URL" for a
+self-hosted git install. The same instructions are printed again after a
+successful purge — that's the last output `seed` ever produces, so it's
+the last chance to see them.
 
 ```
 seed purge
