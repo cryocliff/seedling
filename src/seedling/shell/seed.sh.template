@@ -39,6 +39,33 @@ seed() {
         return 0
     fi
 
+    if [ "$1" = "purge" ] || [ "$1" = "remove-user" ]; then
+        # These commands may finish their own deletion via an invisible
+        # background helper. seed-cli has exited by then, so this
+        # still-loaded function is the only thing left that can tell the
+        # user whether the cleanup actually succeeded.
+        "$__SEEDLING_CLI" "$@"
+        __seed_status=$?
+        __seed_marker="${TMPDIR:-/tmp}/seedling-cleanup.pending"
+        if [ "$__seed_status" -eq 0 ] && [ -f "$__seed_marker" ]; then
+            printf 'Waiting for the background cleanup to finish '
+            __seed_tries=0
+            while [ -d "$__SEEDLING_HOME" ] && [ "$__seed_tries" -lt 30 ]; do
+                sleep 1
+                printf '.'
+                __seed_tries=$((__seed_tries + 1))
+            done
+            echo ""
+            if [ -d "$__SEEDLING_HOME" ]; then
+                echo "Cleanup hasn't finished: files remain at $__SEEDLING_HOME."
+                echo "Something may still be holding them open; delete the folder by hand if it persists."
+            else
+                echo "Confirmed: $__SEEDLING_HOME has been fully removed."
+            fi
+        fi
+        return $__seed_status
+    fi
+
     "$__SEEDLING_CLI" "$@"
 }
 

@@ -118,14 +118,32 @@ def schedule_deferred_delete(path: Path) -> None:
             f'rmdir /s /q "{path}"\r\n'
             '(goto) 2>nul & del "%~f0"\r\n'
         )
+        # CREATE_NO_WINDOW, not DETACHED_PROCESS: a detached (console-less)
+        # cmd.exe causes every console child it launches (the `ping` sleeps)
+        # to get a fresh VISIBLE console -- windows flashing at the user
+        # right after a purge. A hidden console is inherited by the
+        # children, so the whole cleanup runs invisibly.
         subprocess.Popen(
             ["cmd", "/c", str(bat)],
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     else:
+        # The marker file lets the `seed` shell function (the only thing
+        # still alive in the user's terminal after purge) detect that a
+        # cleanup is pending, wait for it, and confirm the result. On
+        # Windows the .bat file itself plays that role -- it self-deletes
+        # when finished.
+        import tempfile
+        marker = Path(tempfile.gettempdir()) / "seedling-cleanup.pending"
+        try:
+            marker.write_text(str(path))
+        except OSError:
+            pass
         subprocess.Popen(
-            ["sh", "-c", 'sleep 2; rm -rf "$0"; sleep 2; rm -rf "$0"', str(path)],
+            ["sh", "-c",
+             'sleep 2; rm -rf "$1"; sleep 2; rm -rf "$1"; rm -f "$2"',
+             "sh", str(path), str(marker)],
             start_new_session=True,
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )

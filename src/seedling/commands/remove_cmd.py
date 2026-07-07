@@ -54,7 +54,7 @@ def run(args) -> int:
         print("The only files left are seedling's own running program, which")
         print("can't delete itself while it's still running. A background")
         print("cleanup removes them automatically a moment after this")
-        print("command exits -- nothing more to do.")
+        print("command exits -- your terminal will confirm once it's done.")
     elif failures:
         print()
         print(colors.warn("Some files could not be removed after several attempts:"))

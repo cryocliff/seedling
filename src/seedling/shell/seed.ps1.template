@@ -41,6 +41,33 @@ function seed {
         return
     }
 
+    if ($Args.Count -ge 1 -and ($Args[0] -eq "purge" -or $Args[0] -eq "remove-user")) {
+        # These commands may finish their own deletion via an invisible
+        # background helper (a program can't delete its own running
+        # executable on Windows). seed-cli has exited by then, so this
+        # still-loaded function is the only thing left that can tell the
+        # user whether the cleanup actually succeeded.
+        & $script:SeedlingCli @Args
+        $exitCode = $LASTEXITCODE
+        $pending = @(Get-ChildItem -Path (Join-Path $env:TEMP "seedling-cleanup-*.bat") -ErrorAction SilentlyContinue)
+        if ($exitCode -eq 0 -and $pending.Count -gt 0) {
+            Write-Host "Waiting for the background cleanup to finish " -NoNewline
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Test-Path $script:SeedlingHome) -and ((Get-Date) -lt $deadline)) {
+                Start-Sleep -Milliseconds 500
+                Write-Host "." -NoNewline
+            }
+            Write-Host ""
+            if (Test-Path $script:SeedlingHome) {
+                Write-Host "Cleanup hasn't finished: files remain at $($script:SeedlingHome)." -ForegroundColor Yellow
+                Write-Host "Something may still be holding them open; delete the folder by hand if it persists."
+            } else {
+                Write-Host "Confirmed: $($script:SeedlingHome) has been fully removed." -ForegroundColor Green
+            }
+        }
+        return
+    }
+
     & $script:SeedlingCli @Args
 }
 

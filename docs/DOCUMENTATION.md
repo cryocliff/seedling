@@ -298,9 +298,12 @@ permission-denied failures, rather than the older behavior of just calling
    `seed remove-user` run *as* `seed-cli.exe` (plus the tool venv's
    `python.exe` underneath it), which live inside the very tree being
    deleted. When those are the only survivors, the command hands them to a
-   small detached helper that finishes the deletion a moment after
-   `seed-cli` exits — and says so, instead of reporting an error. Nothing
-   further to do; the folder is gone a couple of seconds later.
+   small invisible helper that finishes the deletion a moment after
+   `seed-cli` exits — and says so, instead of reporting an error. The
+   `seed` shell function (still loaded in your session) then waits for the
+   helper and prints an explicit confirmation — "Confirmed: ~/seedling has
+   been fully removed" — or a warning with the leftover path if something
+   is still holding files open, so the outcome is never silent.
 
 If a file is genuinely still stuck after all retries — something *outside*
 seedling holding it open — you get its exact path printed, instead of a
