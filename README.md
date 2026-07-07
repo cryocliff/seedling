@@ -140,6 +140,7 @@ and forwards every other command straight to the real CLI binary,
 | `seed list-venvs` | Lists every venv, its Python version, and which one (if any) is currently active. |
 | `seed activate <name>` | Activates that venv in your current shell. |
 | `seed deactivate` | Deactivates the current venv in your current shell (runs the `deactivate` function venv's own activation script defines). |
+| `seed default-venv [name]` | Shows or sets the venv every **new** shell auto-activates (the installer points this at `dev`). Clear it with `seed config unset default_venv`. |
 | `seed install <pkg...>` | Installs packages into the active venv — a direct passthrough to `uv pip install <pkg...>`. |
 | `seed uninstall <pkg...>` | Removes packages from the active venv — a direct passthrough to `uv pip uninstall <pkg...>`. |
 | `seed list-packages` | Lists packages in the active venv — a direct passthrough to `uv pip list`. |

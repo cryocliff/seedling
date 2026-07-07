@@ -501,6 +501,25 @@ defined. Prints a message instead of erroring if nothing is active.
 seed deactivate
 ```
 
+### `seed default-venv [name]`
+
+Shows or sets the venv every **new** shell auto-activates on startup —
+sugar for `seed config get/set default_venv`, promoted to its own command
+because it's the setting people actually reach for. The installer's
+default-environment setup points this at `dev`; switching it to your real
+project is a natural next step.
+
+- With a name: validates the venv exists, then sets it. Existing shells
+  are unaffected — open a new terminal (or `seed activate <name>`).
+- With no name: prints the current default (or that none is set).
+- Clear it with `seed config unset default_venv` — new shells then start
+  with no venv active.
+
+```
+seed default-venv
+seed default-venv myproject
+```
+
 ### `seed install <package...>`
 
 Direct passthrough to `uv pip install <package...>` — everything after
