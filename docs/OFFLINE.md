@@ -21,11 +21,11 @@ things** (plus two optional ones):
 | # | Component | What to provide |
 |---|-----------|-----------------|
 | 1 | seedling's own source | A copy of this repo on a network share (or self-hosted git) — set `SEEDLING_REPO_URL` in `seedling.conf` |
-| 2 | The `uv` binary | Pre-placed in the share's `vendor` step (see below) — copied before install runs |
+| 2 | The `uv` binary | Drop it in `vendor/uv/` inside your repo copy — the installer places it automatically |
 | 3 | Python interpreters | An internal mirror (or share folder) of `python-build-standalone` archives — set `SEEDLING_PYTHON_MIRROR` in `seedling.conf` |
 | 4 | Python packages | An internal index (Artifactory / Nexus / devpi) or a plain directory of wheels — set `SEEDLING_PACKAGE_INDEX` in `seedling.conf`; must include `hatchling` |
-| 5 | git *(optional)* | Installed through your normal software channel, or MinGit pre-extracted into the share |
-| 6 | VS Code *(optional)* | A pre-seeded portable install copied into place |
+| 5 | git *(optional)* | Drop MinGit in `vendor/git/`, or deploy git through your normal software channel |
+| 6 | VS Code *(optional)* | Drop a pre-seeded portable install in `vendor/vscode/` |
 
 The conf values are recorded in seedling's settings at install time and
 applied automatically to every command from then on (visible and
@@ -34,6 +34,30 @@ changeable later via `seed config`).
 Everything in seedling that *isn't* a download — venvs, activation, config,
 logging, previews, removal commands, directory-based updates — already
 works with zero network access.
+
+---
+
+## The `vendor/` convention
+
+Binaries that can't come from a URL/directory setting are handled by a
+single convention: a **`vendor/` folder inside the copy of the repo you
+distribute**. The installer copies whatever it finds there into place
+*before* any download step runs (each of which skips itself when its
+target already exists) — presence equals intent, no wrapper scripts, no
+configuration:
+
+Every payload is a folder whose contents go to the destination:
+
+```
+vendor/uv/         (uv.exe or uv, uvx too if present) -> ~/seedling/system/bin/
+vendor/git/        (an extracted MinGit)              -> ~/seedling/extensions/git/
+vendor/vscode/     (a pre-seeded portable VS Code)    -> ~/seedling/extensions/vscode/
+```
+
+Reinstalls never overwrite binaries already in place, `vendor/` is
+excluded from seedling's private source copy and from updates (a
+pre-seeded VS Code would otherwise bloat `system/src` by hundreds of MB),
+and the folder is gitignored — it exists only on distribution media.
 
 ---
 
@@ -76,16 +100,8 @@ step entirely if uv is already in place**:
 
 So the offline recipe is: download uv's standalone binary once (from
 [github.com/astral-sh/uv/releases](https://github.com/astral-sh/uv/releases),
-on a connected machine), put it on the share, and have your install
-wrapper copy it into `%USERPROFILE%\seedling\system\bin\` before running
-`install.cmd`. A two-line `install-offline.cmd` on the share does it:
-
-```bat
-xcopy /y "%~dp0vendor\uv.exe" "%USERPROFILE%\seedling\system\bin\" >nul
-call "%~dp0install.cmd"
-```
-
-Pin one uv version for the whole organization and update it deliberately —
+on a connected machine) and drop it into `vendor/uv/` in your repo copy —
+the installer places it automatically. Pin one uv version for the whole organization and update it deliberately —
 that also pins which Python versions "newest" resolves to.
 
 ---
@@ -144,11 +160,12 @@ command. The index/directory must contain at minimum:
 git is needed for exactly two things, both avoidable:
 
 - **`seed clone-repo`** — cloning your internal repos. If your git host is
-  on the internal network, users need a git client: deploy one through
-  your normal software channel, **or** pre-extract
+  on the internal network, users need a git client: extract
   [MinGit](https://github.com/git-for-windows/git/releases) (Windows) into
-  `~\seedling\extensions\git\` on the share image — seedling checks there
-  right after PATH and never re-downloads if it finds one.
+  `vendor/git/` in your repo copy — the installer places it at
+  `~\seedling\extensions\git\`, which seedling checks right after PATH
+  and never re-downloads from — or deploy git through your normal
+  software channel.
 - **URL-based `seed update-commands`** — only if your `update_source` is a
   git URL. A directory `update_source` (the network-share flow above)
   needs no git at all.
@@ -163,11 +180,10 @@ If neither applies, skip this component entirely.
 from the marketplace — neither has a supported mirror. Two options:
 
 - **Pre-seed it**: run `seed vscode` once on a connected machine, then copy
-  the resulting `~/seedling/extensions/vscode/` folder onto your share and
-  into place on user machines (or into the share's install wrapper).
-  seedling detects the existing install and never re-downloads. VS Code is
-  fully portable in this layout — settings and extensions travel with the
-  folder.
+  the resulting `~/seedling/extensions/vscode/` folder into `vendor/vscode/`
+  in your repo copy — the installer places it on each machine, and seedling
+  detects the existing install and never re-downloads. VS Code is fully
+  portable in this layout — settings and extensions travel with the folder.
 - **Skip it**: everything else in seedling works without VS Code; users
   bring whatever editor your organization deploys.
 
@@ -202,11 +218,11 @@ On a connected machine:
 
 ```
 S:\tools\seedling\                     <- a copy of this repo
-S:\tools\seedling\vendor\uv.exe        <- pinned uv binary
+S:\tools\seedling\vendor\uv\           <- pinned uv binary (placed automatically)
+S:\tools\seedling\vendor\git\          <- (optional) extracted MinGit
+S:\tools\seedling\vendor\vscode\       <- (optional) pre-seeded portable VS Code
 S:\tools\python-builds\                <- python-build-standalone archives
 S:\tools\wheels\                       <- wheels: hatchling + the default venv packages + your org's packages
-S:\tools\vscode-image\                 <- (optional) pre-seeded extensions\vscode folder
-S:\tools\install-offline.cmd           <- copies vendor\uv.exe into place, then calls install.cmd
 ```
 
 And in `S:\tools\seedling\seedling.conf` — the **only file anyone edits**:
@@ -217,7 +233,7 @@ SEEDLING_PYTHON_MIRROR="S:\tools\python-builds"
 SEEDLING_PACKAGE_INDEX="S:\tools\wheels"
 ```
 
-Then a user runs `S:\tools\install-offline.cmd` and gets the full
+Then a user runs `S:\tools\seedling\install.cmd` and gets the full
 experience — newest mirrored Python, `dev` venv with your default
 packages auto-activated, and `seed update-commands` flowing from the share
 — without their machine ever attempting to reach the internet, and without
@@ -238,7 +254,7 @@ equivalent:
 | Python interpreter mirror | `SEEDLING_PYTHON_MIRROR="S:\tools\python-builds"` — a share folder of archives; seedling handles the `file://` conversion |
 | Package index | `SEEDLING_PACKAGE_INDEX="S:\tools\wheels"` — a **directory of wheels** on the share; the internet index is disabled automatically. Populate it on a connected machine with `pip download -d` (include `hatchling`, the default venv packages, and all transitive deps for your platform) |
 | git hosting | git needs no server: **bare repositories on the share** (`git init --bare S:/repos/project.git`) are full remotes — `seed clone-repo S:/repos/project.git`, push, and pull all work over git's file protocol |
-| VS Code | Pre-seeded portable folder, as above (#6) |
+| VS Code | Pre-seeded portable folder in `vendor/vscode/`, as above (#6) |
 
 Practical notes for this setup: since all users are on the same platform
 (typical for VM fleets), the wheel directory stays small and single-arch;

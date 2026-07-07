@@ -136,6 +136,44 @@ Copy-Item -Recurse -Force $OriginalSrc $SrcDir
 $SrcGit = Join-Path $SrcDir ".git"
 if (Test-Path $SrcGit) { Remove-Item -Recurse -Force $SrcGit }
 
+# ---------------------------------------------------------------------------
+# 2b-vendor. Offline binaries shipped inside the install source (see
+#     docs/OFFLINE.md): a `vendor\` folder in the distributed copy can hold
+#     the uv binary, a portable git, and a pre-seeded VS Code. Whatever is
+#     present gets copied into place BEFORE the download steps below --
+#     each of which skips itself when its target already exists -- so an
+#     offline share needs no wrapper scripts and no extra configuration:
+#     presence equals intent. Every payload is a folder whose CONTENTS go
+#     to the destination:
+#       vendor\uv\     (uv.exe, uvx too if present)     -> ~\seedling\system\bin\
+#       vendor\git\    (an extracted MinGit)            -> ~\seedling\extensions\git\
+#       vendor\vscode\ (a pre-seeded portable VS Code)  -> ~\seedling\extensions\vscode\
+# ---------------------------------------------------------------------------
+$VendorDir = Join-Path $SrcDir "vendor"
+if (Test-Path $VendorDir) {
+    $vendorUv = Join-Path $VendorDir "uv"
+    if ((Test-Path $vendorUv) -and -not (Test-Path "$SeedlingHome\system\bin\uv.exe")) {
+        Copy-Item "$vendorUv\*" -Destination "$SeedlingHome\system\bin" -Recurse -Force
+        Info "Using vendored uv from the install source."
+    }
+    $vendorGit = Join-Path $VendorDir "git"
+    if ((Test-Path $vendorGit) -and -not (Test-Path "$SeedlingHome\extensions\git")) {
+        New-Item -ItemType Directory -Force -Path "$SeedlingHome\extensions\git" | Out-Null
+        Copy-Item "$vendorGit\*" -Destination "$SeedlingHome\extensions\git" -Recurse -Force
+        Info "Using vendored portable git from the install source."
+    }
+    $vendorVscode = Join-Path $VendorDir "vscode"
+    if ((Test-Path $vendorVscode) -and -not (Test-Path "$SeedlingHome\extensions\vscode\app")) {
+        New-Item -ItemType Directory -Force -Path "$SeedlingHome\extensions\vscode" | Out-Null
+        Copy-Item "$vendorVscode\*" -Destination "$SeedlingHome\extensions\vscode" -Recurse -Force
+        Info "Using vendored VS Code from the install source."
+    }
+    # The payloads live on the distribution source, not inside seedling's
+    # private source copy -- a pre-seeded VS Code would otherwise bloat
+    # system\src by hundreds of MB and get re-copied on every update.
+    Remove-Item -Recurse -Force $VendorDir
+}
+
 if ($CleanupOriginalSrc) {
     Remove-Item -Recurse -Force $OriginalSrc -ErrorAction SilentlyContinue
 }

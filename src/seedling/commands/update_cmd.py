@@ -48,7 +48,10 @@ def _refresh_from_directory(src: Path, source_dir: Path) -> bool:
     print(f"Copying seedling source from {source_dir} ...")
     tmp = src.parent / (src.name + ".new")
     fsutil.robust_rmtree(tmp)
-    shutil.copytree(source_dir, tmp, ignore=shutil.ignore_patterns(".git"))
+    # .git never lives inside seedling, and vendor/ payloads (offline
+    # binaries -- possibly hundreds of MB of pre-seeded VS Code) belong on
+    # the distribution source, not in the private source copy.
+    shutil.copytree(source_dir, tmp, ignore=shutil.ignore_patterns(".git", "vendor"))
     return _swap_in(src, tmp)
 
 
@@ -77,6 +80,7 @@ def _refresh_from_url(src: Path, url: str) -> bool:
         fsutil.robust_rmtree(tmp)
         return True
     fsutil.robust_rmtree(tmp / ".git")
+    fsutil.robust_rmtree(tmp / "vendor")
     return _swap_in(src, tmp)
 
 

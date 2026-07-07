@@ -164,6 +164,9 @@ $env:SEEDLING_REPO = "S:\shared\seedling"; .\install.cmd
    recorded in the `update_source` setting instead. This copy, not the
    original download/clone location, is what `seed-cli` actually gets
    installed from. See [The update model](#the-update-model).
+   Any `vendor/` folder in the source (offline binaries: uv, portable
+   git, pre-seeded VS Code — see [OFFLINE.md](OFFLINE.md)) is placed into
+   its runtime locations at this point, and excluded from the copy.
 4. **Installs `uv` into `~/seedling/system/bin`**, using uv's own official
    installer with `UV_INSTALL_DIR` redirected there and
    `UV_NO_MODIFY_PATH=1` set (seedling manages its own PATH/shell

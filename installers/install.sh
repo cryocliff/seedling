@@ -130,6 +130,41 @@ SRC_DIR="$SEEDLING_HOME/system/src"
 # to break deletion on Windows).
 rm -rf "$SRC_DIR/.git"
 
+# ---------------------------------------------------------------------------
+# 2b-vendor. Offline binaries shipped inside the install source (see
+#     docs/OFFLINE.md): a `vendor/` folder in the distributed copy can hold
+#     the uv binary, a portable git, and a pre-seeded VS Code. Whatever is
+#     present gets copied into place BEFORE the download steps below --
+#     each of which skips itself when its target already exists -- so an
+#     offline share needs no wrapper scripts and no extra configuration:
+#     presence equals intent. Every payload is a folder whose CONTENTS go
+#     to the destination:
+#       vendor/uv/     (uv.exe / uv, uvx too if present) -> ~/seedling/system/bin/
+#       vendor/git/    (an extracted MinGit)             -> ~/seedling/extensions/git/
+#       vendor/vscode/ (a pre-seeded portable VS Code)   -> ~/seedling/extensions/vscode/
+# ---------------------------------------------------------------------------
+if [ -d "$SRC_DIR/vendor" ]; then
+    if [ -d "$SRC_DIR/vendor/uv" ] && [ ! -e "$SEEDLING_HOME/system/bin/uv" ] && [ ! -e "$SEEDLING_HOME/system/bin/uv.exe" ]; then
+        cp -R "$SRC_DIR/vendor/uv/." "$SEEDLING_HOME/system/bin/"
+        chmod +x "$SEEDLING_HOME/system/bin/"uv* 2>/dev/null || true
+        info "Using vendored uv from the install source."
+    fi
+    if [ -d "$SRC_DIR/vendor/git" ] && [ ! -d "$SEEDLING_HOME/extensions/git" ]; then
+        mkdir -p "$SEEDLING_HOME/extensions/git"
+        cp -R "$SRC_DIR/vendor/git/." "$SEEDLING_HOME/extensions/git/"
+        info "Using vendored portable git from the install source."
+    fi
+    if [ -d "$SRC_DIR/vendor/vscode" ] && [ ! -d "$SEEDLING_HOME/extensions/vscode/app" ]; then
+        mkdir -p "$SEEDLING_HOME/extensions/vscode"
+        cp -R "$SRC_DIR/vendor/vscode/." "$SEEDLING_HOME/extensions/vscode/"
+        info "Using vendored VS Code from the install source."
+    fi
+    # The payloads live on the distribution source, not inside seedling's
+    # private source copy -- a pre-seeded VS Code would otherwise bloat
+    # system/src by hundreds of MB and get re-copied on every update.
+    rm -rf "$SRC_DIR/vendor"
+fi
+
 if [ "$CLEANUP_ORIGINAL_SRC" = "1" ]; then
     rm -rf "$ORIGINAL_SRC"
 fi
