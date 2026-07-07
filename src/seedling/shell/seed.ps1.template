@@ -14,6 +14,19 @@ $script:SeedlingCli = Join-Path $script:SeedlingHome "system\bin\seed-cli.exe"
 # install time. For default installs this is a no-op.
 $env:SEEDLING_HOME = $script:SeedlingHome
 
+# If the venv this shell has active was just deleted (purge, remove-user,
+# remove-venv(s), remove-python...), deactivate it instead of leaving a
+# dangling prompt pointing at a folder that no longer exists. Only the
+# shell itself can do this -- seed-cli is a child process.
+function script:SeedlingDeactivateIfGone {
+    if ($env:VIRTUAL_ENV -and -not (Test-Path $env:VIRTUAL_ENV)) {
+        if (Get-Command deactivate -ErrorAction SilentlyContinue) {
+            deactivate
+            Write-Host "(deactivated: the venv this shell had active no longer exists)"
+        }
+    }
+}
+
 function seed {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
@@ -49,6 +62,7 @@ function seed {
         # user whether the cleanup actually succeeded.
         & $script:SeedlingCli @Args
         $exitCode = $LASTEXITCODE
+        SeedlingDeactivateIfGone
         $pending = @(Get-ChildItem -Path (Join-Path $env:TEMP "seedling-cleanup-*.bat") -ErrorAction SilentlyContinue)
         if ($exitCode -eq 0 -and $pending.Count -gt 0) {
             Write-Host "Waiting for the background cleanup to finish " -NoNewline
@@ -69,6 +83,7 @@ function seed {
     }
 
     & $script:SeedlingCli @Args
+    SeedlingDeactivateIfGone
 }
 
 # Auto-activate the configured default venv in every new shell

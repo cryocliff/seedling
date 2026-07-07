@@ -279,6 +279,15 @@ PowerShell function, not just a path to a binary:
 - `seed deactivate` → calls the `deactivate` function that a venv's own
   activation script defines (bash: via `declare -f`/`command -v`;
   PowerShell: via `Get-Command`), if one exists in the current shell.
+- **After every command**, the function checks whether the venv this shell
+  has active still exists — if a `remove-venv`/`remove-venvs`/
+  `remove-python`/`remove-user`/`purge` just deleted it, the shell
+  deactivates it automatically (printing `(deactivated: the venv this
+  shell had active no longer exists)`) instead of leaving a dangling
+  prompt pointing at a folder that's gone.
+- After `seed purge`/`seed remove-user`, the function also waits for the
+  invisible self-deletion helper and prints the final confirmation — see
+  [Why deletion sometimes used to fail](#why-deletion-sometimes-used-to-fail).
 - Every other subcommand is forwarded straight through to the real
   `seed-cli` binary as a normal subprocess.
 
@@ -596,9 +605,9 @@ Python/VS Code processes first (see `seed kill-processes`) so a running
 interpreter or open file inside the venv can't block deletion. Warns (but
 doesn't block) if the target looks like the currently active venv
 (`VIRTUAL_ENV` matches its path) — it'll be force-closed along with
-everything else, so your shell may be left with a dangling activated
-prompt; run `seed deactivate` afterward. Prompts for confirmation unless
-`-y`/`--yes`.
+everything else, and your shell deactivates it automatically once it's
+gone (see [Why `seed` is a shell function](#why-seed-is-a-shell-function)).
+Prompts for confirmation unless `-y`/`--yes`.
 
 Deletion itself uses a retrying, defensive helper shared by every
 `remove-*`/`purge` command — see

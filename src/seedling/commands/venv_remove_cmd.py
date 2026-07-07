@@ -14,9 +14,8 @@ def _warn_if_active(target) -> None:
     if active and os.path.abspath(active) == os.path.abspath(str(target)):
         print(f"Note: '{target.name}' looks like your currently active venv. "
               "It'll be force-closed along with any other running Python/VS "
-              "Code processes before deletion, so your shell may end up with "
-              "a dangling activated prompt afterward -- run `seed deactivate` "
-              "once it's done.")
+              "Code processes before deletion; your shell deactivates it "
+              "automatically once it's gone.")
 
 
 def _close_processes() -> None:
