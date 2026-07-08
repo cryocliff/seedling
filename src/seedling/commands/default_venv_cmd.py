@@ -1,5 +1,5 @@
 """
-`seed default-venv [name]` -- show or set the venv every new shell
+`seed venv-default [name]` -- show or set the venv every new shell
 auto-activates. Sugar for `seed config get/set default_venv`, promoted to
 its own command because it's the setting people actually reach for (the
 installer points the default at 'dev'; switching it to your real project
@@ -20,7 +20,7 @@ def run(args) -> int:
             print(f"New shells auto-activate: {current}")
         else:
             print("No default venv is set; new shells start with no venv active.")
-        print("Set one with:  seed default-venv <name>   "
+        print("Set one with:  seed venv-default <name>   "
               "(clear with: seed config unset default_venv)")
         return 0
 

@@ -58,7 +58,7 @@ behavior in detail. This README is a quickstart. Command name: **`seed`**
 │   └── vscode/
 │       └── app/            portable VS Code — binary, settings, and extensions all in one place
 └── repo/
-    └── myrepo/             `seed clone-repo <url>`
+    └── myrepo/             `seed repo-clone <url>`
 ```
 
 Nothing is written to `%APPDATA%`, `~/.vscode`, `~/.local/share`, or any of
@@ -70,7 +70,7 @@ the other places tools like this usually scatter files into. Deleting
 The one-liners at the top bootstrap everything, the same way `uv`'s own
 installer does — no git clone, no download, nothing to know in advance
 beyond that one URL. (One exception, unrelated to installing seedling
-itself: `seed clone-repo` needs git — auto-bootstrapped on Windows, needs
+itself: `seed repo-clone` needs git — auto-bootstrapped on Windows, needs
 to already be present on macOS/Linux. See
 [DOCUMENTATION.md](docs/DOCUMENTATION.md) for why.)
 
@@ -137,29 +137,40 @@ and forwards every other command straight to the real CLI binary,
 
 ## Commands
 
+Command names follow one rule: **a bare noun is the primary action, and
+`noun-verb` is management of that thing**:
+
+| Family | Commands |
+|---|---|
+| Python | `python [ver]` *(install)*, `python-list`, `python-remove` |
+| Venvs | `venv <name>` *(create)*, `venv-list`, `venv-remove`, `venv-remove-all`, `venv-default` |
+| Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `repo-remove` |
+| Packages | `install`, `uninstall`, `package-list` |
+| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+
 | Command | What it does |
 |---|---|
 | `seed python [ver]` | Installs a base interpreter, e.g. `seed python 312` → `~/seedling/python/base/312`. Accepts `312`, `3.12`, or `3.12.4` — or no version at all for the newest stable Python. |
-| `seed list-python` | Lists every base Python installed, and which one is the default for `seed venv`. |
-| `seed remove-python <tag> [-y]` | Deletes a base Python **and** any venvs that were built from it. |
+| `seed python-list` | Lists every base Python installed, and which one is the default for `seed venv`. |
+| `seed python-remove <tag> [-y]` | Deletes a base Python **and** any venvs that were built from it. |
 | `seed venv <name>` | Creates a venv at `~/seedling/python/venvs/<name>` via `uv venv`, off the base Python (the first one you installed, or pass `--python <tag>`). Installs the default packages (`ipython`, `ruff`, `ipykernel`) into it — skip with `--no-default-packages`, or change the list with `seed config set venv_default_packages ...`. |
-| `seed list-venvs` | Lists every venv, its Python version, and which one (if any) is currently active. |
+| `seed venv-list` | Lists every venv, its Python version, and which one (if any) is currently active. |
 | `seed activate <name>` | Activates that venv in your current shell. |
 | `seed deactivate` | Deactivates the current venv in your current shell (runs the `deactivate` function venv's own activation script defines). |
-| `seed default-venv [name]` | Shows or sets the venv every **new** shell auto-activates (the installer points this at `dev`). Clear it with `seed config unset default_venv`. |
+| `seed venv-default [name]` | Shows or sets the venv every **new** shell auto-activates (the installer points this at `dev`). Clear it with `seed config unset default_venv`. |
 | `seed install <pkg...>` | Installs packages into the active venv — a direct passthrough to `uv pip install <pkg...>`. |
 | `seed uninstall <pkg...>` | Removes packages from the active venv — a direct passthrough to `uv pip uninstall <pkg...>`. |
-| `seed list-packages` | Lists packages in the active venv — a direct passthrough to `uv pip list`. |
-| `seed remove-venv <name>` | Deletes a single venv from `~/seedling/python/venvs`. |
-| `seed remove-venvs [-y]` | Deletes every venv seedling has created. |
+| `seed package-list` | Lists packages in the active venv — a direct passthrough to `uv pip list`. |
+| `seed venv-remove <name>` | Deletes a single venv from `~/seedling/python/venvs`. |
+| `seed venv-remove-all [-y]` | Deletes every venv seedling has created. |
 | `seed vscode [path]` | Installs a fully portable VS Code (first run only) into `~/seedling/extensions/vscode`, then opens it. Comes with Python, Pylance, debugpy, Jupyter, Ruff, and Rainbow CSV pre-installed, plus sane default settings. |
-| `seed clone-repo <url>` | Clones a git repo into `~/seedling/repo/<name>`. Needs git; on Windows a portable copy is downloaded automatically if none is found. |
-| `seed list-repos` | Lists every repo cloned with `seed clone-repo`, and each one's origin remote. |
-| `seed cd-repo [name]` | `cd`s your current shell into a cloned repo (or `~/seedling/repo` itself with no name) — so `git status`, `git pull`, etc. just work there. |
-| `seed vscode-repo <name>` | Opens a cloned repo in VS Code. |
-| `seed open-repo [name]` | Opens a cloned repo (or `~/seedling/repo` itself) in the file manager. |
-| `seed install-repo <name>` | Installs a cloned repo's dependencies into the active venv (editable install if it has a `pyproject.toml`, otherwise `requirements.txt`). |
-| `seed remove-repo <name> [-y]` | Deletes a cloned repo. |
+| `seed repo-clone <url>` | Clones a git repo into `~/seedling/repo/<name>`. Needs git; on Windows a portable copy is downloaded automatically if none is found. |
+| `seed repo-list` | Lists every repo cloned with `seed repo-clone`, and each one's origin remote. |
+| `seed repo-cd [name]` | `cd`s your current shell into a cloned repo (or `~/seedling/repo` itself with no name) — so `git status`, `git pull`, etc. just work there. |
+| `seed repo-vscode <name>` | Opens a cloned repo in VS Code. |
+| `seed repo-open [name]` | Opens a cloned repo (or `~/seedling/repo` itself) in the file manager. |
+| `seed repo-install <name>` | Installs a cloned repo's dependencies into the active venv (editable install if it has a `pyproject.toml`, otherwise `requirements.txt`). |
+| `seed repo-remove <name> [-y]` | Deletes a cloned repo. |
 | `seed kill-processes all [-y]` | Force-closes every Python and VS Code related process on the machine (not just seedling's). |
 | `seed kill-processes <name> [-y]` | Force-closes every process with that exact name (e.g. `seed kill-processes node`). |
 | `seed update-commands` | Explicitly updates the `seed` CLI itself. See below — nothing else ever does this automatically. |

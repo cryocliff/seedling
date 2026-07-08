@@ -231,7 +231,7 @@ def install(force: bool = False) -> list[str] | None:
 def open_window(cli: list[str], path: str) -> None:
     """Open VS Code at `path` via its CLI entry point, fully detached from
     seedling's own process so it never blocks or leaks output into the
-    caller's terminal. Shared by `seed vscode` and `seed open-repo`."""
+    caller's terminal. Shared by `seed vscode` and `seed repo-open`."""
     popen_kwargs = dict(_QUIET)
     if os.name == "nt":
         popen_kwargs["creationflags"] = (

@@ -35,12 +35,12 @@ def _venvs_using_base(base_dir) -> list:
 def run(args) -> int:
     tag = getattr(args, "tag", None)
     if not tag:
-        print("Usage: seed remove-python <tag>")
+        print("Usage: seed python-remove <tag>")
         return 1
 
     base_dir = python_cmd.resolve_base(tag)
     if base_dir is None:
-        print(f"No base Python installed with tag '{tag}'. Run: seed list-python")
+        print(f"No base Python installed with tag '{tag}'. Run: seed python-list")
         return 1
 
     affected_venvs = _venvs_using_base(base_dir)

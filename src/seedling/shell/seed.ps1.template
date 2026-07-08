@@ -15,7 +15,7 @@ $script:SeedlingCli = Join-Path $script:SeedlingHome "system\bin\seed-cli.exe"
 $env:SEEDLING_HOME = $script:SeedlingHome
 
 # If the venv this shell has active was just deleted (purge, remove-user,
-# remove-venv(s), remove-python...), deactivate it instead of leaving a
+# venv-remove(-all), python-remove...), deactivate it instead of leaving a
 # dangling prompt pointing at a folder that no longer exists. Only the
 # shell itself can do this -- seed-cli is a child process.
 function script:SeedlingDeactivateIfGone {
@@ -45,14 +45,14 @@ function seed {
         return
     }
 
-    if ($Args.Count -ge 1 -and $Args[0] -eq "cd-repo") {
+    if ($Args.Count -ge 1 -and $Args[0] -eq "repo-cd") {
         # The @() must wrap the WHOLE if: assigning from an if-statement
         # pipes its output, which unwraps a one-element array to a bare
         # string -- and splatting a string can enumerate per-character.
         $rest = @(if ($Args.Count -gt 1) { $Args[1..($Args.Count - 1)] } else { @() })
-        $target = & $script:SeedlingCli cd-repo @rest --print-path
+        $target = & $script:SeedlingCli repo-cd @rest --print-path
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($target)) {
-            & $script:SeedlingCli cd-repo @rest
+            & $script:SeedlingCli repo-cd @rest
             return
         }
         Set-Location $target

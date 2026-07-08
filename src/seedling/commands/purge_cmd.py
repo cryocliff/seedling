@@ -59,10 +59,10 @@ def _print_reinstall(update_source) -> None:
         print(f"    macOS/Linux:  sh {source}{sep}install.cmd")
 
 _PARTIAL_REMOVE_LINES = [
-    "  seed remove-venv <name>    delete one venv",
-    "  seed remove-venvs          delete all venvs",
-    "  seed remove-python <tag>   delete a base Python and the venvs built from it",
-    "  seed remove-repo <name>    delete one cloned repo",
+    "  seed venv-remove <name>    delete one venv",
+    "  seed venv-remove-all       delete all venvs",
+    "  seed python-remove <tag>   delete a base Python and the venvs built from it",
+    "  seed repo-remove <name>    delete one cloned repo",
     "  seed remove-user           delete everything under ~/seedling, but keep the",
     "                             `seed` command hook so a reinstall picks right back up",
 ]

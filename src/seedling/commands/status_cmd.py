@@ -56,7 +56,7 @@ def _check_git() -> None:
     if git:
         _ok(f"git available at {git}")
     else:
-        _warn("git not found (Windows: auto-downloaded on first `seed clone-repo`; "
+        _warn("git not found (Windows: auto-downloaded on first `seed repo-clone`; "
               "macOS/Linux: install it with your package manager)")
 
 

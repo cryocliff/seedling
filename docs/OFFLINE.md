@@ -71,8 +71,8 @@ and the folder is gitignored — it exists only on distribution media.
 | `uv` binary | astral.sh | Install (skipped if already present) |
 | CPython interpreters | github.com (python-build-standalone releases) | `seed python`; the installer's default-environment setup; first `uv tool install` if no Python exists on the machine |
 | Python packages (incl. `hatchling` to build seed-cli, and the default venv packages `ipython`/`ruff`) | pypi.org | Install; `seed venv`; `seed install`; `seed update-commands` |
-| MinGit (Windows only) | github.com (git-for-windows releases) | First `seed clone-repo` if no git is found |
-| VS Code + extensions | update.code.visualstudio.com / marketplace.visualstudio.com | First `seed vscode` / `seed vscode-repo` |
+| MinGit (Windows only) | github.com (git-for-windows releases) | First `seed repo-clone` if no git is found |
+| VS Code + extensions | update.code.visualstudio.com / marketplace.visualstudio.com | First `seed vscode` / `seed repo-vscode` |
 
 ---
 
@@ -161,7 +161,7 @@ command. The index/directory must contain at minimum:
 
 git is needed for exactly two things, both avoidable:
 
-- **`seed clone-repo`** — cloning your internal repos. If your git host is
+- **`seed repo-clone`** — cloning your internal repos. If your git host is
   on the internal network, users need a git client: extract
   [MinGit](https://github.com/git-for-windows/git/releases) (Windows) into
   `vendor/git/` in your repo copy — the installer places it at
@@ -280,7 +280,7 @@ equivalent:
 | seedling source + updates | Already file-based (#1) — the ideal case |
 | Python interpreter mirror | `SEEDLING_PYTHON_MIRROR="S:\tools\python-builds"` — a share folder of archives; seedling handles the `file://` conversion |
 | Package index | `SEEDLING_PACKAGE_INDEX="S:\tools\wheels"` — a **directory of wheels** on the share; the internet index is disabled automatically. Populate it on a connected machine with `pip download -d` (include `hatchling`, the default venv packages, and all transitive deps for your platform) |
-| git hosting | git needs no server: **bare repositories on the share** (`git init --bare S:/repos/project.git`) are full remotes — `seed clone-repo S:/repos/project.git`, push, and pull all work over git's file protocol |
+| git hosting | git needs no server: **bare repositories on the share** (`git init --bare S:/repos/project.git`) are full remotes — `seed repo-clone S:/repos/project.git`, push, and pull all work over git's file protocol |
 | VS Code | Pre-seeded portable folder in `vendor/vscode/`, as above (#6) |
 
 Practical notes for this setup: since all users are on the same platform

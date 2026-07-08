@@ -34,10 +34,10 @@ For a shorter quickstart, see [README.md](README.md).
 
 Nothing needs to be pre-installed to install seedling itself — not Python,
 not uv, not git (git is only needed if you install from a GitHub repo
-rather than a local checkout; see below). Separately, `seed clone-repo`
+rather than a local checkout; see below). Separately, `seed repo-clone`
 (a feature *of* seedling, used after it's installed) needs git to work —
 on Windows, seedling downloads a portable copy automatically if none is
-found; see [`seed clone-repo`](#seed-clone-repo-git-url) for details.
+found; see [`seed repo-clone`](#seed-repo-clone-git-url) for details.
 
 ### The four ways to install
 
@@ -254,7 +254,7 @@ could actually work. On failure, this window is skipped and the original
 │       └── app/                   portable VS Code
 │           └── data/               portable-mode settings + extensions, all local
 └── repo/
-    └── <name>/                    one folder per `seed clone-repo <url>`
+    └── <name>/                    one folder per `seed repo-clone <url>`
 ```
 
 Only `system/` holds seedling's own internals; `python/`, `extensions/`,
@@ -287,12 +287,12 @@ PowerShell function, not just a path to a binary:
 - `seed deactivate` → calls the `deactivate` function that a venv's own
   activation script defines (bash: via `declare -f`/`command -v`;
   PowerShell: via `Get-Command`), if one exists in the current shell.
-- `seed cd-repo [name]` → same trick as activate: the CLI resolves the
+- `seed repo-cd [name]` → same trick as activate: the CLI resolves the
   repo's path (`--print-path`), and the function `cd`s the current shell
   there.
 - **After every command**, the function checks whether the venv this shell
-  has active still exists — if a `remove-venv`/`remove-venvs`/
-  `remove-python`/`remove-user`/`purge` just deleted it, the shell
+  has active still exists — if a `venv-remove`/`venv-remove-all`/
+  `python-remove`/`remove-user`/`purge` just deleted it, the shell
   deactivates it automatically (printing `(deactivated: the venv this
   shell had active no longer exists)`) instead of leaving a dangling
   prompt pointing at a folder that's gone.
@@ -311,8 +311,8 @@ shell function, since a subprocess has no way to affect your shell.
 
 ## Why deletion is so defensive
 
-Every command that deletes a directory (`remove-venv(s)`, `remove-python`,
-`remove-repo`, `remove-user`, `purge`) routes through a shared helper
+Every command that deletes a directory (`venv-remove(-all)`, `python-remove`,
+`repo-remove`, `remove-user`, `purge`) routes through a shared helper
 (`robust_rmtree`) that works around four real causes of "file in use" /
 permission-denied failures, rather than just calling
 `shutil.rmtree(path, ignore_errors=True)` and hoping:
@@ -394,8 +394,8 @@ a given call (the shell integration uses this itself for its startup
 
 ## Non-interactive mode & previews
 
-Every destructive command (`remove-python`, `remove-venv`, `remove-venvs`,
-`remove-repo`, `remove-user`, `purge`, `kill-processes`) supports three
+Every destructive command (`python-remove`, `venv-remove`, `venv-remove-all`,
+`repo-remove`, `remove-user`, `purge`, `kill-processes`) supports three
 shared flags:
 
 - `-y` / `--yes` — skip the confirmation prompt and proceed.
@@ -426,6 +426,17 @@ installed by uv's own tooling, which does its own verification.
 
 ## Command reference
 
+Command names follow one rule: **a bare noun is the primary action, and
+`noun-verb` is management of that thing**:
+
+| Family | Commands |
+|---|---|
+| Python | `python [ver]` *(install)*, `python-list`, `python-remove` |
+| Venvs | `venv <name>` *(create)*, `venv-list`, `venv-remove`, `venv-remove-all`, `venv-default` |
+| Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `repo-remove` |
+| Packages | `install`, `uninstall`, `package-list` |
+| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+
 ### `seed python [version]`
 
 Installs a base CPython interpreter via `uv python install`, redirected
@@ -447,7 +458,7 @@ installer's default-environment setup uses.
 seed python 312
 ```
 
-### `seed list-python`
+### `seed python-list`
 
 Lists every base Python interpreter installed via `seed python`, showing
 the short tag, the real versioned directory it points to, which one is the
@@ -455,7 +466,7 @@ default used by `seed venv`, and flags any alias whose target directory has
 gone missing (e.g. if it was deleted by hand).
 
 ```
-seed list-python
+seed python-list
 ```
 ```
 Base Python interpreters in ~/seedling/python/base:
@@ -463,7 +474,7 @@ Base Python interpreters in ~/seedling/python/base:
   312      -> cpython-3.12.4-linux-x86_64-gnu  (default for `seed venv`)
 ```
 
-### `seed remove-python <tag> [-y]`
+### `seed python-remove <tag> [-y]`
 
 Deletes a base Python **and every venv that was built from it** — venvs
 can't function without the interpreter they were created against, so this
@@ -481,7 +492,7 @@ cascades rather than leaving them broken.
   left).
 
 ```
-seed remove-python 311
+seed python-remove 311
 ```
 
 ### `seed venv <name> [--python <tag>] [--no-default-packages]`
@@ -511,7 +522,7 @@ seed venv myproject
 seed venv myproject --python 311
 ```
 
-### `seed list-venvs`
+### `seed venv-list`
 
 Lists every venv under `~/seedling/python/venvs`, showing the Python
 version each was created with (read straight from its `pyvenv.cfg`) and
@@ -519,7 +530,7 @@ marking whichever one matches the current `VIRTUAL_ENV` (i.e. the one
 you're actually inside right now) as active.
 
 ```
-seed list-venvs
+seed venv-list
 ```
 ```
 Venvs in ~/seedling/python/venvs:
@@ -549,7 +560,7 @@ defined. Prints a message instead of erroring if nothing is active.
 seed deactivate
 ```
 
-### `seed default-venv [name]`
+### `seed venv-default [name]`
 
 Shows or sets the venv every **new** shell auto-activates on startup —
 sugar for `seed config get/set default_venv`, promoted to its own command
@@ -564,8 +575,8 @@ project is a natural next step.
   with no venv active.
 
 ```
-seed default-venv
-seed default-venv myproject
+seed venv-default
+seed venv-default myproject
 ```
 
 ### `seed install <package...>`
@@ -592,14 +603,14 @@ argument-forwarding and `VIRTUAL_ENV` warning behavior as `seed install`.
 seed uninstall requests
 ```
 
-### `seed list-packages`
+### `seed package-list`
 
 Direct passthrough to `uv pip list` for the active venv. Anything after
-`list-packages` is forwarded to `uv pip list` untouched (e.g. `--format
+`package-list` is forwarded to `uv pip list` untouched (e.g. `--format
 json`, `--outdated`). Same `VIRTUAL_ENV` warning as `install`/`uninstall`.
 
 ```
-seed list-packages
+seed package-list
 ```
 ```
 Package            Version
@@ -609,7 +620,7 @@ requests           2.34.2
 urllib3            2.7.0
 ```
 
-### `seed remove-venv <name> [-y]`
+### `seed venv-remove <name> [-y]`
 
 Deletes a single venv from `~/seedling/python/venvs`. Force-closes
 Python/VS Code processes first (see `seed kill-processes`) so a running
@@ -626,18 +637,18 @@ Deletion itself uses a retrying, defensive helper shared by every
 for the bug this fixes and how.
 
 ```
-seed remove-venv myproject
-seed remove-venv myproject -y
+seed venv-remove myproject
+seed venv-remove myproject -y
 ```
 
-### `seed remove-venvs [-y]`
+### `seed venv-remove-all [-y]`
 
 Deletes **every** venv under `~/seedling/python/venvs`, with the same
-process-closing behavior as `seed remove-venv`. Lists them all before
+process-closing behavior as `seed venv-remove`. Lists them all before
 asking for confirmation (skippable with `-y`).
 
 ```
-seed remove-venvs
+seed venv-remove-all
 ```
 
 ### `seed vscode [path] [--reinstall] [--no-open]`
@@ -697,7 +708,7 @@ seed vscode ./my-project
 seed vscode --reinstall
 ```
 
-### `seed clone-repo <git-url>`
+### `seed repo-clone <git-url>`
 
 Clones a git repository into `~/seedling/repo/<name>` via `git clone`. The
 repo name is derived from the URL (handles `https://host/group/name.git`,
@@ -715,29 +726,29 @@ There, if git isn't found, you'll get a clear one-line instruction
 manager on Linux) instead of a silent failure.
 
 Fails with a clear message (rather than overwriting) if a repo with that
-name already exists — remove it first with `seed remove-repo`.
+name already exists — remove it first with `seed repo-remove`.
 
 ```
-seed clone-repo https://github.com/you/some-project.git
+seed repo-clone https://github.com/you/some-project.git
 ```
 
-### `seed list-repos`
+### `seed repo-list`
 
-Lists every repo cloned via `seed clone-repo`, along with each one's
+Lists every repo cloned via `seed repo-clone`, along with each one's
 `origin` remote URL (if it's still a git checkout with one configured).
 
 ```
-seed list-repos
+seed repo-list
 ```
 ```
 Repos in ~/seedling/repo:
   some-project  -> https://github.com/you/some-project.git
 ```
 
-### `seed cd-repo [name]`
+### `seed repo-cd [name]`
 
 Changes your **current shell's** directory to a cloned repo — the natural
-follow-up to `seed clone-repo`, and the quickest way to run git commands
+follow-up to `seed repo-clone`, and the quickest way to run git commands
 (`git status`, `git pull`, `git push`) against it. With no name, takes you
 to `~/seedling/repo` itself. Errors (without moving) if the repo doesn't
 exist.
@@ -748,33 +759,33 @@ resolves and validates the path, and the function does the actual `cd`
 (see [Why `seed` is a shell function](#why-seed-is-a-shell-function)).
 
 ```
-seed cd-repo myproject
-seed cd-repo
+seed repo-cd myproject
+seed repo-cd
 ```
 
-### `seed vscode-repo <name>`
+### `seed repo-vscode <name>`
 
 Opens a cloned repo in VS Code — installing VS Code first if it isn't
 already (same one-time setup as `seed vscode`). Shares the same CLI-entry-
 point, detached-process opening logic as `seed vscode`.
 
 ```
-seed vscode-repo some-project
+seed repo-vscode some-project
 ```
 
-### `seed open-repo [name]`
+### `seed repo-open [name]`
 
 Opens a cloned repo in the **operating system's file manager** (Explorer
 on Windows, Finder on macOS, your desktop's default elsewhere). With no
 name, opens `~/seedling/repo` itself. For opening in VS Code, use
-`seed vscode-repo`.
+`seed repo-vscode`.
 
 ```
-seed open-repo some-project
-seed open-repo
+seed repo-open some-project
+seed repo-open
 ```
 
-### `seed install-repo <name>`
+### `seed repo-install <name>`
 
 Installs a cloned repo's dependencies into the currently active venv:
 
@@ -789,17 +800,17 @@ Installs a cloned repo's dependencies into the currently active venv:
 
 ```
 seed activate myproject
-seed install-repo some-project
+seed repo-install some-project
 ```
 
-### `seed remove-repo <name> [-y]`
+### `seed repo-remove <name> [-y]`
 
 Deletes a cloned repo from `~/seedling/repo`. Same process-closing
-behavior as `seed remove-venv` before deletion, and the same confirmation
+behavior as `seed venv-remove` before deletion, and the same confirmation
 prompt (skippable with `-y`).
 
 ```
-seed remove-repo some-project
+seed repo-remove some-project
 ```
 
 ### `seed kill-processes <all|name> [-y]`
@@ -826,7 +837,7 @@ Implementation notes:
   because on macOS/Linux, `seed-cli`'s own process image is literally a
   `python3.x` process (its shebang execs the interpreter directly).
 - The underlying `kill_python_and_vscode()` helper is reused by
-  `seed remove-venv(s)`, `seed remove-python`, `seed remove-repo`,
+  `seed venv-remove(-all)`, `seed python-remove`, `seed repo-remove`,
   `seed remove-user`, and `seed purge` — anything that deletes files is
   preceded by this same sweep, to avoid "file in use" failures.
 
@@ -911,8 +922,8 @@ otherwise just accumulate in your home directory forever.
 
 The interactive confirmation screen also points out the alternatives
 before you commit: how to preserve repos (`--keep-repos`), the smaller
-partial-removal commands (`remove-venv`, `remove-venvs`, `remove-python`,
-`remove-repo`, and `remove-user`, which keeps the shell hook), and the
+partial-removal commands (`venv-remove`, `venv-remove-all`, `python-remove`,
+`repo-remove`, and `remove-user`, which keeps the shell hook), and the
 reinstall instructions matched to how this copy was installed: the
 public one-liners for a github.com install, "run the installer on the
 share again" for a network-drive install, or "clone this URL" for a
@@ -1105,17 +1116,17 @@ into.
 
 ## Known limits
 
-- `seed vscode`/`seed vscode-repo` on macOS unpack the official `.app` bundle
+- `seed vscode`/`seed repo-vscode` on macOS unpack the official `.app` bundle
   and launch its embedded CLI binary; this is the least-tested of the
   three platforms.
 - `seed python` version resolution assumes CPython (uv's default); PyPy and
   other implementations aren't wired up.
 - `seed kill-processes` (and everything that reuses it) is machine-wide,
   not seedling-scoped, by design — see the command reference above.
-- `seed clone-repo`/`install-repo` need git; only Windows is auto-bootstrapped
+- `seed repo-clone`/`repo-install` need git; only Windows is auto-bootstrapped
   (via portable MinGit) — macOS/Linux still need system git already present,
   since neither has an equivalent official portable build.
-- `seed install-repo` only recognizes `pyproject.toml` and
+- `seed repo-install` only recognizes `pyproject.toml` and
   `requirements.txt` — repos using other dependency files (e.g. Poetry's
   `poetry.lock` without a PEP 621 `pyproject.toml` section, or Pipenv) may
   need manual installation.

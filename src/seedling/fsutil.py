@@ -1,6 +1,6 @@
 """
 Shared, defensive directory deletion, used everywhere seedling deletes a
-directory tree (remove-venv(s), remove-python, remove-repo, remove-user,
+directory tree (venv-remove(-all), python-remove, repo-remove, remove-user,
 purge).
 
 Plain `shutil.rmtree(path, ignore_errors=True)` has several real failure

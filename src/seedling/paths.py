@@ -28,7 +28,7 @@ scattered across the filesystem:
             data/         <- --user-data-dir (settings, keybindings, etc.)
             extensions/   <- --extensions-dir
     repo/
-        <name>/           <- repos cloned with `seed clone-repo`
+        <name>/           <- repos cloned with `seed repo-clone`
 """
 
 from __future__ import annotations

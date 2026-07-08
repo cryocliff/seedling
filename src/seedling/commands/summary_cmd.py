@@ -118,7 +118,7 @@ def run(args) -> int:
     repos = (sorted(d for d in paths.REPO_DIR.iterdir() if d.is_dir())
              if paths.REPO_DIR.exists() else [])
     if not repos:
-        print("  none -- run: seed clone-repo <git-url>")
+        print("  none -- run: seed repo-clone <git-url>")
     for r in repos:
         remote = ""
         if git and (r / ".git").exists():

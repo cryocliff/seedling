@@ -15,7 +15,7 @@ __SEEDLING_CLI="$__SEEDLING_HOME/system/bin/seed-cli"
 export SEEDLING_HOME="$__SEEDLING_HOME"
 
 # If the venv this shell has active was just deleted (purge, remove-user,
-# remove-venv(s), remove-python...), deactivate it instead of leaving a
+# venv-remove(-all), python-remove...), deactivate it instead of leaving a
 # dangling prompt pointing at a folder that no longer exists. Only the
 # shell itself can do this -- seed-cli is a child process.
 __seedling_deactivate_if_gone() {
@@ -43,13 +43,13 @@ seed() {
         return 0
     fi
 
-    if [ "$1" = "cd-repo" ]; then
+    if [ "$1" = "repo-cd" ]; then
         shift
         local target
-        target="$("$__SEEDLING_CLI" cd-repo "$@" --print-path)"
+        target="$("$__SEEDLING_CLI" repo-cd "$@" --print-path)"
         local status=$?
         if [ $status -ne 0 ] || [ -z "$target" ]; then
-            "$__SEEDLING_CLI" cd-repo "$@"
+            "$__SEEDLING_CLI" repo-cd "$@"
             return $status
         fi
         cd "$target" || return 1

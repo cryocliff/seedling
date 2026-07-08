@@ -7,7 +7,7 @@ from .. import config, paths, uv_tool
 
 
 def list_packages(args) -> int:
-    """seed list-packages -- passthrough to `uv pip list` for the active venv."""
+    """seed package-list -- passthrough to `uv pip list` for the active venv."""
     extra = getattr(args, "extra", None) or []
     if not os.environ.get("VIRTUAL_ENV"):
         print("Note: no venv looks active (VIRTUAL_ENV isn't set). "

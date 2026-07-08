@@ -23,7 +23,7 @@ def _derive_name(url: str) -> str:
 def clone(args) -> int:
     url = getattr(args, "url", None)
     if not url:
-        print("Usage: seed clone-repo <git-url>")
+        print("Usage: seed repo-clone <git-url>")
         return 1
 
     try:
@@ -36,7 +36,7 @@ def clone(args) -> int:
     target = paths.repo_dir(name)
     if target.exists():
         print(f"'{name}' already exists at {target}.")
-        print(f"Run `seed remove-repo {name}` first if you want to re-clone it.")
+        print(f"Run `seed repo-remove {name}` first if you want to re-clone it.")
         return 1
 
     paths.REPO_DIR.mkdir(parents=True, exist_ok=True)
@@ -47,21 +47,21 @@ def clone(args) -> int:
         return 1
 
     print(f"Cloned '{name}'.")
-    print(f"  seed cd-repo {name}        # jump into it (git commands work there)")
-    print(f"  seed vscode-repo {name}    # open it in VS Code")
-    print(f"  seed open-repo {name}      # open it in the file manager")
-    print(f"  seed install-repo {name}   # install its dependencies into the active venv")
+    print(f"  seed repo-cd {name}        # jump into it (git commands work there)")
+    print(f"  seed repo-vscode {name}    # open it in VS Code")
+    print(f"  seed repo-open {name}      # open it in the file manager")
+    print(f"  seed repo-install {name}   # install its dependencies into the active venv")
     return 0
 
 
 def list_repos(args) -> int:
     if not paths.REPO_DIR.exists() or not any(paths.REPO_DIR.iterdir()):
-        print("No repos cloned yet. Run: seed clone-repo <git-url>")
+        print("No repos cloned yet. Run: seed repo-clone <git-url>")
         return 0
 
     repos = sorted(d for d in paths.REPO_DIR.iterdir() if d.is_dir())
     if not repos:
-        print("No repos cloned yet. Run: seed clone-repo <git-url>")
+        print("No repos cloned yet. Run: seed repo-clone <git-url>")
         return 0
 
     git = git_tool.find_git()  # best-effort only here; don't auto-download just to list
@@ -82,7 +82,7 @@ def list_repos(args) -> int:
 def remove(args) -> int:
     name = getattr(args, "name", None)
     if not name:
-        print("Usage: seed remove-repo <name>")
+        print("Usage: seed repo-remove <name>")
         return 1
 
     target = paths.repo_dir(name)
@@ -123,7 +123,7 @@ def remove(args) -> int:
 
 
 def cd_repo(args) -> int:
-    """`seed cd-repo [name]` -- change the current shell's directory to a
+    """`seed repo-cd [name]` -- change the current shell's directory to a
     cloned repo (or to ~/seedling/repo itself with no name). The directory
     change happens in the `seed` shell function; this command's job is
     resolving and validating the target (same split as `seed activate`)."""
@@ -133,10 +133,10 @@ def cd_repo(args) -> int:
     if not target.exists():
         if name:
             print(f"No repo named '{name}' found in {paths.REPO_DIR}")
-            print("Clone it first with:  seed clone-repo <git-url>")
+            print("Clone it first with:  seed repo-clone <git-url>")
         else:
             print(f"No repos cloned yet ({paths.REPO_DIR} doesn't exist). "
-                  "Run: seed clone-repo <git-url>")
+                  "Run: seed repo-clone <git-url>")
         return 1
 
     if getattr(args, "print_path", False):
@@ -156,9 +156,9 @@ def cd_repo(args) -> int:
 
 
 def open_repo(args) -> int:
-    """`seed open-repo [name]` -- open a cloned repo (or the repos folder
+    """`seed repo-open [name]` -- open a cloned repo (or the repos folder
     itself) in the OS file manager. For opening in VS Code, that's
-    `seed vscode-repo`."""
+    `seed repo-vscode`."""
     name = getattr(args, "name", None)
     target = paths.repo_dir(name) if name else paths.REPO_DIR
     if not target.exists():
@@ -166,7 +166,7 @@ def open_repo(args) -> int:
             print(f"No repo named '{name}' found in {paths.REPO_DIR}")
         else:
             print(f"No repos cloned yet ({paths.REPO_DIR} doesn't exist). "
-                  "Run: seed clone-repo <git-url>")
+                  "Run: seed repo-clone <git-url>")
         return 1
 
     print(f"Opening in the file manager -> {target}")
@@ -181,10 +181,10 @@ def open_repo(args) -> int:
 
 
 def vscode_repo(args) -> int:
-    """`seed vscode-repo <name>` -- open a cloned repo in VS Code."""
+    """`seed repo-vscode <name>` -- open a cloned repo in VS Code."""
     name = getattr(args, "name", None)
     if not name:
-        print("Usage: seed vscode-repo <name>")
+        print("Usage: seed repo-vscode <name>")
         return 1
 
     target = paths.repo_dir(name)
@@ -205,7 +205,7 @@ def vscode_repo(args) -> int:
 def install_repo(args) -> int:
     name = getattr(args, "name", None)
     if not name:
-        print("Usage: seed install-repo <name>")
+        print("Usage: seed repo-install <name>")
         return 1
 
     target = paths.repo_dir(name)

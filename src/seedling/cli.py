@@ -35,23 +35,23 @@ from .uv_tool import UvNotFound
 _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Python & venvs", [
         ("python", "[version]", "Install a base Python (newest stable if no version)"),
-        ("list-python", "", "List installed base Python interpreters"),
+        ("python-list", "", "List installed base Python interpreters"),
         ("venv", "<name> [--python <tag>]", "Create a venv from a base Python"),
-        ("list-venvs", "", "List venvs, and which one is active"),
+        ("venv-list", "", "List venvs, and which one is active"),
         ("activate", "<name>", "Activate a venv in this shell"),
         ("deactivate", "", "Deactivate the current venv"),
-        ("default-venv", "[name]", "Show or set the venv new shells auto-activate"),
+        ("venv-default", "[name]", "Show or set the venv new shells auto-activate"),
         ("install", "<package...>", "Install packages (uv pip install)"),
         ("uninstall", "<package...>", "Uninstall packages (uv pip uninstall)"),
-        ("list-packages", "", "List installed packages (uv pip list)"),
+        ("package-list", "", "List installed packages (uv pip list)"),
     ]),
     ("Git repos", [
-        ("clone-repo", "<git-url>", "Clone a repo into ~/seedling/repo"),
-        ("list-repos", "", "List cloned repos"),
-        ("cd-repo", "[name]", "cd into a cloned repo (or the repos folder)"),
-        ("vscode-repo", "<name>", "Open a repo in VS Code"),
-        ("open-repo", "[name]", "Open a repo in the file manager"),
-        ("install-repo", "<name>", "Install a repo's dependencies into the active venv"),
+        ("repo-clone", "<git-url>", "Clone a repo into ~/seedling/repo"),
+        ("repo-list", "", "List cloned repos"),
+        ("repo-cd", "[name]", "cd into a cloned repo (or the repos folder)"),
+        ("repo-vscode", "<name>", "Open a repo in VS Code"),
+        ("repo-open", "[name]", "Open a repo in the file manager"),
+        ("repo-install", "<name>", "Install a repo's dependencies into the active venv"),
     ]),
     ("VS Code", [
         ("vscode", "[path] [--reinstall]", "Install (once) and open VS Code"),
@@ -65,10 +65,10 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("where", "", "Print the seedling home directory"),
     ]),
     ("Danger zone -- these delete things (all support --preview)", [
-        ("remove-repo", "<name>", "Delete a cloned repo"),
-        ("remove-venv", "<name>", "Delete a single venv"),
-        ("remove-venvs", "", "Delete every venv"),
-        ("remove-python", "<tag>", "Delete a base Python and its venvs"),
+        ("repo-remove", "<name>", "Delete a cloned repo"),
+        ("venv-remove", "<name>", "Delete a single venv"),
+        ("venv-remove-all", "", "Delete every venv"),
+        ("python-remove", "<tag>", "Delete a base Python and its venvs"),
         ("remove-user", "", "Delete everything seedling manages"),
         ("purge", "", "Full uninstall (also removes the shell hook)"),
     ]),
@@ -117,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
                                 "the newest stable version")
 
     p_remove_python = sub.add_parser(
-        "remove-python", parents=[danger],
+        "python-remove", parents=[danger],
         help="Remove a base Python and any venvs built from it")
     p_remove_python.add_argument("tag", nargs="?", help="e.g. 312")
 
@@ -131,8 +131,8 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Don't install the default packages "
                               "(see `seed config get venv_default_packages`)")
 
-    sub.add_parser("list-venvs", help="List every venv seedling has created")
-    sub.add_parser("list-python", help="List every base Python interpreter installed")
+    sub.add_parser("venv-list", help="List every venv seedling has created")
+    sub.add_parser("python-list", help="List every base Python interpreter installed")
 
     p_activate = sub.add_parser("activate", help="Activate a venv")
     p_activate.add_argument("name", nargs="?", help="Name of the venv to activate")
@@ -142,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("deactivate", help="Deactivate the current venv")
 
     p_default_venv = sub.add_parser(
-        "default-venv", help="Show or set the venv every new shell auto-activates")
+        "venv-default", help="Show or set the venv every new shell auto-activates")
     p_default_venv.add_argument("name", nargs="?",
                                  help="Venv to auto-activate in new shells; "
                                       "omit to show the current one")
@@ -158,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
                               help="Anything after this is passed straight to `uv pip uninstall`")
 
     p_list_packages = sub.add_parser(
-        "list-packages", help="List packages in the active venv (passthrough to `uv pip list`)")
+        "package-list", help="List packages in the active venv (passthrough to `uv pip list`)")
     p_list_packages.add_argument("extra", nargs=argparse.REMAINDER,
                                   help="Anything after this is passed straight to `uv pip list`")
 
@@ -171,40 +171,40 @@ def build_parser() -> argparse.ArgumentParser:
                                 "(used by the installer's default setup)")
 
     p_clone_repo = sub.add_parser(
-        "clone-repo", help="Clone a git repo into ~/seedling/repo")
+        "repo-clone", help="Clone a git repo into ~/seedling/repo")
     p_clone_repo.add_argument("url", nargs="?", help="Git URL to clone")
 
-    sub.add_parser("list-repos", help="List every repo cloned with `seed clone-repo`")
+    sub.add_parser("repo-list", help="List every repo cloned with `seed repo-clone`")
 
     p_cd_repo = sub.add_parser(
-        "cd-repo", help="Change directory to a cloned repo (or ~/seedling/repo with no name)")
+        "repo-cd", help="Change directory to a cloned repo (or ~/seedling/repo with no name)")
     p_cd_repo.add_argument("name", nargs="?", help="Name of the repo to cd into")
     p_cd_repo.add_argument("--print-path", dest="print_path", action="store_true",
                             help=argparse.SUPPRESS)  # used internally by the shell wrapper
 
-    p_remove_repo = sub.add_parser("remove-repo", parents=[danger],
+    p_remove_repo = sub.add_parser("repo-remove", parents=[danger],
                                    help="Delete a cloned repo")
     p_remove_repo.add_argument("name", nargs="?", help="Name of the repo to delete")
 
     p_open_repo = sub.add_parser(
-        "open-repo", help="Open a cloned repo (or ~/seedling/repo) in the file manager")
+        "repo-open", help="Open a cloned repo (or ~/seedling/repo) in the file manager")
     p_open_repo.add_argument("name", nargs="?", help="Name of the repo to open")
 
-    p_vscode_repo = sub.add_parser("vscode-repo", help="Open a cloned repo in VS Code")
+    p_vscode_repo = sub.add_parser("repo-vscode", help="Open a cloned repo in VS Code")
     p_vscode_repo.add_argument("name", nargs="?", help="Name of the repo to open")
 
     p_install_repo = sub.add_parser(
-        "install-repo",
+        "repo-install",
         help="Install a cloned repo's dependencies into the active venv")
     p_install_repo.add_argument("name", nargs="?", help="Name of the repo to install")
 
     p_remove = sub.add_parser("remove-user", parents=[danger],
                               help="Delete everything seedling manages")
 
-    sub.add_parser("remove-venvs", parents=[danger],
+    sub.add_parser("venv-remove-all", parents=[danger],
                    help="Delete every venv seedling has created")
 
-    p_remove_venv = sub.add_parser("remove-venv", parents=[danger],
+    p_remove_venv = sub.add_parser("venv-remove", parents=[danger],
                                    help="Delete a single venv")
     p_remove_venv.add_argument("name", nargs="?", help="Name of the venv to delete")
 
@@ -285,27 +285,27 @@ def _dispatch_main(argv: list[str]) -> int:
 
     dispatch = {
         "python": python_cmd.run,
-        "remove-python": python_remove_cmd.run,
+        "python-remove": python_remove_cmd.run,
         "venv": venv_cmd.run,
-        "list-venvs": list_cmd.list_venvs,
-        "list-python": list_cmd.list_python,
+        "venv-list": list_cmd.list_venvs,
+        "python-list": list_cmd.list_python,
         "activate": activate_cmd.run,
         "deactivate": deactivate_cmd.run,
-        "default-venv": default_venv_cmd.run,
+        "venv-default": default_venv_cmd.run,
         "install": install_cmd.run,
         "uninstall": uninstall_cmd.run,
-        "list-packages": list_cmd.list_packages,
+        "package-list": list_cmd.list_packages,
         "vscode": vscode_cmd.run,
-        "clone-repo": repo_cmd.clone,
-        "list-repos": repo_cmd.list_repos,
-        "cd-repo": repo_cmd.cd_repo,
-        "remove-repo": repo_cmd.remove,
-        "open-repo": repo_cmd.open_repo,
-        "vscode-repo": repo_cmd.vscode_repo,
-        "install-repo": repo_cmd.install_repo,
+        "repo-clone": repo_cmd.clone,
+        "repo-list": repo_cmd.list_repos,
+        "repo-cd": repo_cmd.cd_repo,
+        "repo-remove": repo_cmd.remove,
+        "repo-open": repo_cmd.open_repo,
+        "repo-vscode": repo_cmd.vscode_repo,
+        "repo-install": repo_cmd.install_repo,
         "remove-user": remove_cmd.run,
-        "remove-venvs": venv_remove_cmd.run_all,
-        "remove-venv": venv_remove_cmd.run_one,
+        "venv-remove-all": venv_remove_cmd.run_all,
+        "venv-remove": venv_remove_cmd.run_one,
         "purge": purge_cmd.run,
         "kill-processes": kill_cmd.run,
         "update-commands": update_cmd.run,
