@@ -155,6 +155,7 @@ and forwards every other command straight to the real CLI binary,
 | `seed vscode [path]` | Installs a fully portable VS Code (first run only) into `~/seedling/extensions/vscode`, then opens it. Comes with Python, Pylance, debugpy, Jupyter, Ruff, and Rainbow CSV pre-installed, plus sane default settings. |
 | `seed clone-repo <url>` | Clones a git repo into `~/seedling/repo/<name>`. Needs git; on Windows a portable copy is downloaded automatically if none is found. |
 | `seed list-repos` | Lists every repo cloned with `seed clone-repo`, and each one's origin remote. |
+| `seed cd-repo [name]` | `cd`s your current shell into a cloned repo (or `~/seedling/repo` itself with no name) — so `git status`, `git pull`, etc. just work there. |
 | `seed open-repo <name>` | Opens a cloned repo in VS Code. |
 | `seed install-repo <name>` | Installs a cloned repo's dependencies into the active venv (editable install if it has a `pyproject.toml`, otherwise `requirements.txt`). |
 | `seed remove-repo <name> [-y]` | Deletes a cloned repo. |

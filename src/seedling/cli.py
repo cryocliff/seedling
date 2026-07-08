@@ -48,6 +48,7 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Git repos", [
         ("clone-repo", "<git-url>", "Clone a repo into ~/seedling/repo"),
         ("list-repos", "", "List cloned repos"),
+        ("cd-repo", "[name]", "cd into a cloned repo (or the repos folder)"),
         ("open-repo", "<name>", "Open a repo in VS Code"),
         ("install-repo", "<name>", "Install a repo's dependencies into the active venv"),
     ]),
@@ -174,6 +175,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list-repos", help="List every repo cloned with `seed clone-repo`")
 
+    p_cd_repo = sub.add_parser(
+        "cd-repo", help="Change directory to a cloned repo (or ~/seedling/repo with no name)")
+    p_cd_repo.add_argument("name", nargs="?", help="Name of the repo to cd into")
+    p_cd_repo.add_argument("--print-path", dest="print_path", action="store_true",
+                            help=argparse.SUPPRESS)  # used internally by the shell wrapper
+
     p_remove_repo = sub.add_parser("remove-repo", parents=[danger],
                                    help="Delete a cloned repo")
     p_remove_repo.add_argument("name", nargs="?", help="Name of the repo to delete")
@@ -286,6 +293,7 @@ def _dispatch_main(argv: list[str]) -> int:
         "vscode": vscode_cmd.run,
         "clone-repo": repo_cmd.clone,
         "list-repos": repo_cmd.list_repos,
+        "cd-repo": repo_cmd.cd_repo,
         "remove-repo": repo_cmd.remove,
         "open-repo": repo_cmd.open_repo,
         "install-repo": repo_cmd.install_repo,

@@ -46,6 +46,7 @@ def clone(args) -> int:
         return 1
 
     print(f"Cloned '{name}'.")
+    print(f"  seed cd-repo {name}        # jump into it (git commands work there)")
     print(f"  seed open-repo {name}      # open it in VS Code")
     print(f"  seed install-repo {name}   # install its dependencies into the active venv")
     return 0
@@ -116,6 +117,39 @@ def remove(args) -> int:
         return 1
 
     print(f"Deleted repo '{name}'.")
+    return 0
+
+
+def cd_repo(args) -> int:
+    """`seed cd-repo [name]` -- change the current shell's directory to a
+    cloned repo (or to ~/seedling/repo itself with no name). The directory
+    change happens in the `seed` shell function; this command's job is
+    resolving and validating the target (same split as `seed activate`)."""
+    name = getattr(args, "name", None)
+    target = paths.repo_dir(name) if name else paths.REPO_DIR
+
+    if not target.exists():
+        if name:
+            print(f"No repo named '{name}' found in {paths.REPO_DIR}")
+            print("Clone it first with:  seed clone-repo <git-url>")
+        else:
+            print(f"No repos cloned yet ({paths.REPO_DIR} doesn't exist). "
+                  "Run: seed clone-repo <git-url>")
+        return 1
+
+    if getattr(args, "print_path", False):
+        # Consumed by the `seed` shell function, which cd's to this path so
+        # the change actually affects the caller's shell.
+        print(str(target))
+        return 0
+
+    print(
+        "This only works when 'seed' is the shell function installed by the "
+        "seedling installer (it's what lets a directory change affect your "
+        "current shell). If you're seeing this, re-run the installer or "
+        "open a new terminal.\n"
+        f"Target directory: {target}"
+    )
     return 0
 
 

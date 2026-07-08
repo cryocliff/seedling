@@ -34,7 +34,7 @@ function seed {
     )
 
     if ($Args.Count -ge 1 -and $Args[0] -eq "activate") {
-        $rest = $Args[1..($Args.Count - 1)]
+        $rest = @($Args[1..($Args.Count - 1)])
         $scriptPath = & $script:SeedlingCli activate @rest --print-path
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($scriptPath)) {
             & $script:SeedlingCli activate @rest
@@ -42,6 +42,21 @@ function seed {
         }
         . $scriptPath
         Write-Host "Activated: $($rest[0])"
+        return
+    }
+
+    if ($Args.Count -ge 1 -and $Args[0] -eq "cd-repo") {
+        # The @() must wrap the WHOLE if: assigning from an if-statement
+        # pipes its output, which unwraps a one-element array to a bare
+        # string -- and splatting a string can enumerate per-character.
+        $rest = @(if ($Args.Count -gt 1) { $Args[1..($Args.Count - 1)] } else { @() })
+        $target = & $script:SeedlingCli cd-repo @rest --print-path
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($target)) {
+            & $script:SeedlingCli cd-repo @rest
+            return
+        }
+        Set-Location $target
+        Write-Host "-> $target"
         return
     }
 

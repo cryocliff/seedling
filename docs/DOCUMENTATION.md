@@ -287,6 +287,9 @@ PowerShell function, not just a path to a binary:
 - `seed deactivate` → calls the `deactivate` function that a venv's own
   activation script defines (bash: via `declare -f`/`command -v`;
   PowerShell: via `Get-Command`), if one exists in the current shell.
+- `seed cd-repo [name]` → same trick as activate: the CLI resolves the
+  repo's path (`--print-path`), and the function `cd`s the current shell
+  there.
 - **After every command**, the function checks whether the venv this shell
   has active still exists — if a `remove-venv`/`remove-venvs`/
   `remove-python`/`remove-user`/`purge` just deleted it, the shell
@@ -729,6 +732,24 @@ seed list-repos
 ```
 Repos in ~/seedling/repo:
   some-project  -> https://github.com/you/some-project.git
+```
+
+### `seed cd-repo [name]`
+
+Changes your **current shell's** directory to a cloned repo — the natural
+follow-up to `seed clone-repo`, and the quickest way to run git commands
+(`git status`, `git pull`, `git push`) against it. With no name, takes you
+to `~/seedling/repo` itself. Errors (without moving) if the repo doesn't
+exist.
+
+Like `seed activate`, this only works through the `seed` shell function —
+a child process can't change its parent shell's directory — so the CLI
+resolves and validates the path, and the function does the actual `cd`
+(see [Why `seed` is a shell function](#why-seed-is-a-shell-function)).
+
+```
+seed cd-repo myproject
+seed cd-repo
 ```
 
 ### `seed open-repo <name>`
