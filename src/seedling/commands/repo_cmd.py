@@ -11,12 +11,13 @@ from . import kill_cmd, vscode_cmd
 
 def _derive_name(url: str) -> str:
     """Best-effort repo-name extraction from any common git URL shape:
-    https://host/group/name.git, git@host:group/name.git, ./local/path, etc."""
-    name = url.rstrip("/")
+    https://host/group/name.git, git@host:group/name.git, ./local/path,
+    and Windows/UNC share paths like S:\\repos\\name.git."""
+    name = url.replace("\\", "/").rstrip("/")
     if name.endswith(".git"):
         name = name[: -len(".git")]
     name = name.split("/")[-1]
-    name = name.split(":")[-1]  # scp-style git@host:group/name
+    name = name.split(":")[-1]  # scp-style git@host:name (no slash after colon)
     return name or "repo"
 
 

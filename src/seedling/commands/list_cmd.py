@@ -73,12 +73,15 @@ def list_venvs(args) -> int:
 
     active = os.environ.get("VIRTUAL_ENV")
     active_resolved = os.path.abspath(active) if active else None
+    default_venv = config.get("default_venv")
 
     print(f"Venvs in {paths.VENVS_DIR}:")
     for v in venvs:
         version = _read_venv_python_version(v)
         version_str = f"  [python {version}]" if version else ""
         marker = "  (active)" if active_resolved and os.path.abspath(str(v)) == active_resolved else ""
+        if v.name == default_venv:
+            marker += "  (auto-activated in new shells)"
         print(f"  {v.name}{version_str}{marker}")
 
     return 0

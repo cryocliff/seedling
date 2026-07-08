@@ -262,6 +262,13 @@ VS Code) and exactly what to provide instead.
 
 ## Project layout (for contributors)
 
+Run the test suite with **`uvx pytest`** from the repo root — no setup, no
+dependencies to install (uv provides pytest; the tests import seedling
+straight from `src/`). The suite is fully offline: every test runs against
+a throwaway sandbox home, stubs uv for installer runs, and hand-crafts
+local wheels for the package-index tests. ~120 tests, ~40 seconds.
+
+
 ```
 README.md
 seedling.conf         deployment config: install/update source URL (or directory) + install-time settings
@@ -273,6 +280,9 @@ installers/
   uninstall.sh / uninstall.ps1   full removal, including the shell hook (same end state as `seed purge`)
 docs/
   DOCUMENTATION.md    the full documentation
+tests/
+  conftest.py         sandbox fixtures (throwaway home, stub uv, env isolation)
+  test_*.py           unit + CLI + offline/installer/shell-template integration tests
 src/
   pyproject.toml      the python package definition (`uv tool install` targets this folder)
   seedling/

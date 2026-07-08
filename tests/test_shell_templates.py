@@ -1,0 +1,149 @@
+"""The `seed` shell functions rendered from both templates: repo-cd
+directory changes, auto-deactivation when the active venv vanishes, the
+purge wait-and-confirm flow, and PowerShell parse validity."""
+
+from __future__ import annotations
+
+import subprocess
+import textwrap
+
+import pytest
+
+from conftest import (BASH, POWERSHELL, REPO_ROOT, needs_bash,
+                      needs_powershell, run_bash)
+
+SH_TEMPLATE = REPO_ROOT / "src" / "seedling" / "shell" / "seed.sh.template"
+PS_TEMPLATE = REPO_ROOT / "src" / "seedling" / "shell" / "seed.ps1.template"
+
+
+def _render_sh(tmp_path, home) -> str:
+    rendered = tmp_path / "seed.sh"
+    rendered.write_text(
+        SH_TEMPLATE.read_text().replace("__SEEDLING_HOME_PLACEHOLDER__",
+                                        home.as_posix()))
+    return rendered.as_posix()
+
+
+def _stub_cli(home, body: str) -> None:
+    bin_dir = home / "system" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    stub = bin_dir / "seed-cli"
+    stub.write_text("#!/bin/sh\n" + body)
+    stub.chmod(0o755)
+
+
+@needs_bash
+class TestBashFunction:
+    def test_template_renders_and_parses(self, tmp_path):
+        rendered = _render_sh(tmp_path, tmp_path / "seedling")
+        assert run_bash(f"sh -n '{rendered}'").returncode == 0
+
+    def test_repo_cd_changes_directory(self, tmp_path):
+        home = tmp_path / "seedling"
+        repo = home / "repo" / "myproj"
+        repo.mkdir(parents=True)
+        _stub_cli(home, textwrap.dedent(f"""\
+            if [ "$1" = "repo-cd" ] && [ "$3" = "--print-path" ]; then
+                if [ "$2" = "myproj" ]; then echo "{repo.as_posix()}"; exit 0; fi
+                exit 1
+            fi
+            [ "$1" = "repo-cd" ] && echo "No repo named '$2'"
+            exit 0
+        """))
+        rendered = _render_sh(tmp_path, home)
+        result = run_bash(
+            f"VIRTUAL_ENV=keep . '{rendered}'; cd /tmp; "
+            f"seed repo-cd myproj >/dev/null; pwd; "
+            f"seed repo-cd ghost >/dev/null 2>&1; echo exit=$?")
+        # git-bash reports MSYS-translated paths; compare on the stable tail
+        assert result.stdout.splitlines()[0].endswith("seedling/repo/myproj")
+        assert "exit=1" in result.stdout
+
+    def test_auto_deactivate_when_active_venv_deleted(self, tmp_path):
+        home = tmp_path / "seedling"
+        venv = home / "python" / "venvs" / "dev"
+        venv.mkdir(parents=True)
+        _stub_cli(home, textwrap.dedent(f"""\
+            [ "$1" = "venv-remove" ] && rm -rf "{venv.as_posix()}"
+            exit 0
+        """))
+        rendered = _render_sh(tmp_path, home)
+        result = run_bash(
+            f"VIRTUAL_ENV='{venv.as_posix()}'; "
+            f"deactivate() {{ unset VIRTUAL_ENV; unset -f deactivate; }}; "
+            f". '{rendered}'; seed venv-remove dev; "
+            f"echo \"after=${{VIRTUAL_ENV:-unset}}\"")
+        assert "deactivated: the venv this shell had active" in result.stdout
+        assert "after=unset" in result.stdout
+
+    def test_purge_waits_for_cleanup_and_confirms(self, tmp_path):
+        home = tmp_path / "seedling"
+        home.mkdir(parents=True)
+        marker = tmp_path / "seedling-cleanup.pending"
+        _stub_cli(home, textwrap.dedent(f"""\
+            if [ "$1" = "purge" ]; then
+                touch "{marker.as_posix()}"
+                ( sleep 2; rm -rf "{home.as_posix()}"; rm -f "{marker.as_posix()}" ) >/dev/null 2>&1 &
+            fi
+            exit 0
+        """))
+        rendered = _render_sh(tmp_path, home)
+        result = run_bash(
+            f"VIRTUAL_ENV=keep . '{rendered}'; "
+            f"TMPDIR='{tmp_path.as_posix()}' seed purge")
+        assert "Waiting for the background cleanup" in result.stdout
+        assert "has been fully removed" in result.stdout
+
+    def test_purge_skips_wait_when_nothing_deferred(self, tmp_path):
+        home = tmp_path / "seedling"
+        home.mkdir(parents=True)
+        _stub_cli(home, 'exit 0\n')
+        rendered = _render_sh(tmp_path, home)
+        result = run_bash(
+            f"VIRTUAL_ENV=keep . '{rendered}'; "
+            f"TMPDIR='{tmp_path.as_posix()}' seed purge")
+        assert "Waiting" not in result.stdout
+
+
+@needs_powershell
+class TestPowerShellFunction:
+    def _run_ps(self, script: str):
+        return subprocess.run(
+            [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=120)
+
+    def test_template_parses(self, tmp_path):
+        rendered = tmp_path / "seed.ps1"
+        rendered.write_text(
+            PS_TEMPLATE.read_text().replace("__SEEDLING_HOME_PLACEHOLDER__",
+                                            str(tmp_path / "seedling")))
+        result = self._run_ps(
+            f"$e = $null; "
+            f"[System.Management.Automation.PSParser]::Tokenize("
+            f"(Get-Content '{rendered}' -Raw), [ref]$e) | Out-Null; "
+            f"if ($e.Count) {{ exit 1 }} else {{ 'PARSE-OK' }}")
+        assert "PARSE-OK" in result.stdout
+
+    def test_repo_cd_changes_directory(self, tmp_path):
+        home = tmp_path / "seedling"
+        repo = home / "repo" / "myproj"
+        repo.mkdir(parents=True)
+        rendered = tmp_path / "seed.ps1"
+        rendered.write_text(
+            PS_TEMPLATE.read_text().replace("__SEEDLING_HOME_PLACEHOLDER__", str(home)))
+        stub = tmp_path / "stub.ps1"
+        stub.write_text(textwrap.dedent(f"""\
+            param([Parameter(ValueFromRemainingArguments = $true)][string[]]$A)
+            if ($A[0] -eq "repo-cd" -and $A[-1] -eq "--print-path") {{
+                if ($A[1] -eq "myproj") {{ "{repo}"; exit 0 }}
+                exit 1
+            }}
+            exit 0
+        """))
+        result = self._run_ps(
+            f"$env:VIRTUAL_ENV = 'keep'; . '{rendered}'; "
+            f"Remove-Item Env:VIRTUAL_ENV; "
+            f"$script:SeedlingCli = '{stub}'; "
+            f"Set-Location $env:TEMP; seed repo-cd myproj | Out-Null; "
+            f"(Get-Location).Path")
+        assert str(repo) in result.stdout

@@ -1118,6 +1118,27 @@ into.
 
 ---
 
+## Running the tests
+
+`uvx pytest` from the repo root runs the whole suite (~120 tests, ~40s) —
+uv supplies pytest, and `tests/conftest.py` puts `src/` on the import
+path, so nothing needs installing first. Design guarantees the suite
+enforces:
+
+- **Never touches your real `~/seedling`** — every test rebinds seedling's
+  paths to a throwaway directory, and the machine-wide process killer is
+  disabled for the whole run.
+- **Fully offline** — installer runs use a stub `uv` that logs its
+  invocations; the offline-index tests hand-craft a local wheel and prove
+  both directions (a package in the wheels folder installs; one that
+  isn't fails fast with the internet index disabled); downloads are
+  exercised over `file://` URLs.
+- Real `git`, `bash`, and `powershell` are used where present (git file
+  protocol, installer end-to-end, shell-function behavior) and those
+  tests skip cleanly on machines without them.
+
+---
+
 ## Known limits
 
 - `seed vscode`/`seed repo-vscode` on macOS unpack the official `.app` bundle
