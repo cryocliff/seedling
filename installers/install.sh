@@ -83,10 +83,15 @@ fi
 # {user} -> the installing user's login name, so a shared install root
 # (e.g. C:\seedling\{user}) gives every user a private, conflict-free
 # folder. git-bash may not set $USER, so fall back through $USERNAME/id.
+# When the token is used, record the shared root (the parent of the
+# per-user home) so the elevated admin-* commands know this is a
+# multi-user deployment.
+SEEDLING_SHARED_ROOT=""
 case "$SEEDLING_HOME" in
     *"{user}"*)
         _seed_user="${USER:-${USERNAME:-$(id -un 2>/dev/null || echo user)}}"
         SEEDLING_HOME=$(printf '%s' "$SEEDLING_HOME" | sed "s/{user}/$_seed_user/g")
+        SEEDLING_SHARED_ROOT=$(dirname "$SEEDLING_HOME")
         ;;
 esac
 
@@ -289,6 +294,11 @@ if [ ! -f "$SETTINGS_FILE" ]; then
         [ -n "$entries" ] && entries="$entries,
 "
         entries="$entries  \"ca_cert\": \"$(json_escape "$CERT_BUNDLE")\""
+    fi
+    if [ -n "$SEEDLING_SHARED_ROOT" ]; then
+        [ -n "$entries" ] && entries="$entries,
+"
+        entries="$entries  \"shared_root\": \"$(json_escape "$SEEDLING_SHARED_ROOT")\""
     fi
     if [ -n "$entries" ]; then
         printf '{\n%s\n}\n' "$entries" > "$SETTINGS_FILE"

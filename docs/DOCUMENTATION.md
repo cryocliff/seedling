@@ -23,6 +23,7 @@ For a shorter quickstart, see [README.md](README.md).
 - [Non-interactive mode & previews](#non-interactive-mode--previews)
 - [Download verification](#download-verification)
 - [Command reference](#command-reference)
+- [Admin commands (shared-root teardown)](#admin-commands-shared-root-teardown)
 - [The update model](#the-update-model)
 - [Uninstalling](#uninstalling)
 - [Troubleshooting](#troubleshooting)
@@ -1061,6 +1062,66 @@ seed config set update_source https://github.mycompany.com/tools/seedling.git
 seed config set update_source "S:\shared\seedling"
 seed config set venv_default_packages "ipython,ruff,requests"
 seed config unset default_venv
+```
+
+---
+
+## Admin commands (shared-root teardown)
+
+The ordinary `seed purge` / `remove-user` are strictly per-user -- they can
+only touch the caller's own folder, by design. For a **shared-root install**
+(`SEEDLING_HOME_DIR="<root>/{user}"`), tearing down *other* users needs an
+elevated, ownership-seizing operation. That's the `admin-*` family.
+
+These commands are **hidden from normal help** -- `seed help` won't list
+them. Reveal them with:
+
+```
+seed help --admin
+```
+
+Every one of them:
+
+- **Requires elevation** (Administrator on Windows, root on POSIX) and
+  refuses with instructions otherwise -- a normal user cannot delete
+  another user's files, and shouldn't be able to.
+- **Only works on a shared-root install** -- it reads the `shared_root`
+  setting recorded at install time when the `{user}` token was used. On a
+  plain `~/seedling` it refuses (there are no sibling users to manage). seedling knows its own
+  install type from this setting: `seed summary` shows "install type:
+  multi-user (shared root: ...)" vs "single-user", and the admin pointer in
+  `seed help` only appears on a multi-user install.
+- **Takes ownership before deleting** (`takeown` + `icacls` on Windows; root
+  already bypasses ownership on POSIX), so user-owned, read-only, and
+  runtime-generated files (`__pycache__`, a user's own `pip` installs) don't
+  block the teardown -- the gap that install-time permissions can never
+  fully close.
+- Supports `--preview`, `-y`, and `--non-interactive` like the ordinary
+  destructive commands.
+
+| Command | Removes |
+|---|---|
+| `admin-purge-all-users` | every user's install under the shared root, plus every user's shell hook |
+| `admin-remove-user <user>` | one user's entire seedling home |
+| `admin-venv-remove <user> <name>` | one user's single venv |
+| `admin-venv-remove-all <user>` | all of one user's venvs |
+| `admin-python-remove <user> <tag>` | one user's base Python and the venvs built on it |
+| `admin-repo-remove <user> <name>` | one user's cloned repo |
+
+Example -- an administrator decommissioning a shared lab machine whose users
+live under `C:\seedling\<name>`:
+
+```
+# In an Administrator PowerShell:
+seed help --admin                     # see the family
+seed admin-purge-all-users --preview  # list exactly what would go
+seed admin-purge-all-users            # take ownership + remove everyone, confirm first
+```
+
+Or cleaning up after one departed user:
+
+```
+seed admin-remove-user alice          # removes C:\seedlinglice entirely
 ```
 
 ---

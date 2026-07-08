@@ -186,6 +186,12 @@ Run `uninstall.cmd` (Windows) or `sh ./uninstall.cmd` (macOS/Linux) to
 also remove the shell hook from your profile (i.e. remove `seed` itself, not
 just what it created).
 
+**Admin / multi-user teardown:** shared-root installs (`SEEDLING_HOME_DIR`
+with a `{user}` token) also get an elevated `admin-*` family for removing
+*other* users' installs — hidden from normal help; run `seed help --admin`
+(as Administrator/root) to see it, or the
+[full docs](docs/DOCUMENTATION.md#admin-commands-shared-root-teardown).
+
 **Every destructive command** (`remove-*`, `purge`, `kill-processes`) also
 takes `--preview` — it prints exactly what would be deleted or closed, then
 exits without touching anything — and `--non-interactive`, which makes it

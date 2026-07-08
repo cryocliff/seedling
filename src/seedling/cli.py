@@ -7,6 +7,7 @@ import sys
 from . import colors, config, paths, runlog
 from .commands import (
     activate_cmd,
+    admin_cmd,
     config_cmd,
     deactivate_cmd,
     default_venv_cmd,
@@ -74,18 +75,49 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ]),
 ]
 
+# The admin family is hidden from normal help -- it's elevated, cross-user
+# teardown of a shared-root install, not something a normal user runs.
+# `seed help --admin` reveals it.
+_ADMIN_HELP_GROUP: tuple[str, list[tuple[str, str, str]]] = (
+    "Admin (elevated; shared-root installs) -- run as Administrator/root", [
+        ("admin-purge-all-users", "", "Remove EVERY user's install under the shared root"),
+        ("admin-remove-user", "<user>", "Remove one user's entire install"),
+        ("admin-venv-remove", "<user> <name>", "Remove one user's venv"),
+        ("admin-venv-remove-all", "<user>", "Remove all of one user's venvs"),
+        ("admin-python-remove", "<user> <tag>", "Remove one user's base Python + its venvs"),
+        ("admin-repo-remove", "<user> <name>", "Remove one user's cloned repo"),
+    ],
+)
 
-def print_grouped_help() -> None:
+
+def _print_group(title: str, commands) -> None:
+    heading = colors.danger(title) if ("Danger" in title or "Admin" in title) else colors.header(title)
+    print(heading)
+    for name, args_hint, desc in commands:
+        left = f"  {name} {args_hint}".rstrip()
+        print(f"{left:<38} {colors.dim(desc)}")
+    print()
+
+
+def print_grouped_help(show_admin: bool = False) -> None:
     print(colors.bold("seed") + " -- a tidy, single-folder wrapper around uv")
     print()
     print("Usage: seed <command> [arguments]")
     print()
     for title, commands in _HELP_GROUPS:
-        heading = colors.danger(title) if "Danger" in title else colors.header(title)
-        print(heading)
-        for name, args_hint, desc in commands:
-            left = f"  {name} {args_hint}".rstrip()
-            print(f"{left:<32} {colors.dim(desc)}")
+        _print_group(title, commands)
+    if show_admin:
+        _print_group(*_ADMIN_HELP_GROUP)
+        print("These take ownership of other users' files and must run "
+              "elevated. See docs/DOCUMENTATION.md.")
+    elif config.is_multi_user():
+        # Only surface the admin family on installs where it actually
+        # applies -- a shared multi-user deployment. On a normal per-user
+        # install it would just be noise (and refuses to run anyway).
+        print(colors.header("This is a shared multi-user install.") +
+              " Managing it as an admin?")
+        print("  Run " + colors.bold("seed help --admin") +
+              " for the elevated commands that remove other users' installs.")
         print()
     print("Run any command with -h for its full options, e.g. `seed venv -h`.")
 
@@ -243,6 +275,40 @@ def build_parser() -> argparse.ArgumentParser:
     p_cfg_unset = config_sub.add_parser("unset", help="Reset a setting to its default")
     p_cfg_unset.add_argument("key")
 
+    p_help = sub.add_parser("help", help="Show grouped help (add --admin for admin commands)")
+    p_help.add_argument("--admin", action="store_true",
+                         help="Also list the elevated admin/multi-user commands")
+
+    # --- Admin family: elevated, cross-user teardown of a shared-root
+    #     install. Registered so they dispatch, but omitted from the grouped
+    #     help unless `seed help --admin` is used. All support the danger
+    #     flags (-y / --preview / --non-interactive).
+    p_apa = sub.add_parser("admin-purge-all-users", parents=[danger],
+                            help="[admin] Remove EVERY user's install under the shared root")
+
+    p_aru = sub.add_parser("admin-remove-user", parents=[danger],
+                            help="[admin] Remove one user's entire seedling install")
+    p_aru.add_argument("user", nargs="?", help="Username whose install to remove")
+
+    p_avr = sub.add_parser("admin-venv-remove", parents=[danger],
+                            help="[admin] Remove one user's venv")
+    p_avr.add_argument("user", nargs="?")
+    p_avr.add_argument("name", nargs="?")
+
+    p_avra = sub.add_parser("admin-venv-remove-all", parents=[danger],
+                             help="[admin] Remove all of one user's venvs")
+    p_avra.add_argument("user", nargs="?")
+
+    p_apr = sub.add_parser("admin-python-remove", parents=[danger],
+                            help="[admin] Remove one user's base Python + its venvs")
+    p_apr.add_argument("user", nargs="?")
+    p_apr.add_argument("tag", nargs="?")
+
+    p_arr = sub.add_parser("admin-repo-remove", parents=[danger],
+                            help="[admin] Remove one user's cloned repo")
+    p_arr.add_argument("user", nargs="?")
+    p_arr.add_argument("name", nargs="?")
+
     return parser
 
 
@@ -271,7 +337,10 @@ def _dispatch_main(argv: list[str]) -> int:
     # somewhere around a dozen commands. Subcommand-specific help, e.g.
     # `seed venv -h`, is untouched and still uses argparse's normal output.
     if not argv or argv[0] in ("-h", "--help"):
-        print_grouped_help()
+        print_grouped_help(show_admin="--admin" in argv)
+        return 0
+    if argv[0] == "help":
+        print_grouped_help(show_admin="--admin" in argv)
         return 0
 
     parser = build_parser()
@@ -312,6 +381,12 @@ def _dispatch_main(argv: list[str]) -> int:
         "summary": summary_cmd.run,
         "status": status_cmd.run,
         "config": config_cmd.run,
+        "admin-purge-all-users": admin_cmd.purge_all_users,
+        "admin-remove-user": admin_cmd.remove_user,
+        "admin-venv-remove": admin_cmd.venv_remove,
+        "admin-venv-remove-all": admin_cmd.venv_remove_all,
+        "admin-python-remove": admin_cmd.python_remove,
+        "admin-repo-remove": admin_cmd.repo_remove,
     }
 
     if args.command == "where":

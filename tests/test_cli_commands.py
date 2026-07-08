@@ -22,17 +22,25 @@ ALL_COMMANDS = [
     "kill-processes", "update-commands", "remove-user", "purge",
 ]
 
+# handled specially in _dispatch_main rather than via the dispatch table
+_NON_DISPATCH = {"where", "help"}
+
+ADMIN_COMMANDS = [
+    "admin-purge-all-users", "admin-remove-user", "admin-venv-remove",
+    "admin-venv-remove-all", "admin-python-remove", "admin-repo-remove",
+]
+
 
 def test_every_command_is_dispatchable(home):
     """Guards against a rename touching the parser but not the dispatch
-    table (or vice versa)."""
+    table (or vice versa) -- admin family included."""
     from seedling import cli
     parser = cli.build_parser()
     subparsers = next(
         a for a in parser._actions
         if a.__class__.__name__ == "_SubParsersAction")
     parser_names = set(subparsers.choices)
-    assert parser_names == set(ALL_COMMANDS)
+    assert parser_names == set(ALL_COMMANDS) | set(ADMIN_COMMANDS) | _NON_DISPATCH
 
 
 def test_bare_seed_shows_grouped_help(run_cli):
@@ -41,6 +49,39 @@ def test_bare_seed_shows_grouped_help(run_cli):
     for family_member in ("python-list", "venv-remove-all", "repo-clone",
                           "repo-vscode", "venv-default", "package-list"):
         assert family_member in out
+
+
+def test_help_hides_admin_note_on_single_user(run_cli, home):
+    from seedling import config
+    assert config.is_multi_user() is False
+    code, out = run_cli("help")
+    assert "multi-user" not in out  # no admin note on a plain install
+    assert "admin-" not in out
+
+
+def test_help_shows_admin_note_only_when_multi_user(run_cli, home):
+    from seedling import config
+    config.set_value("shared_root", r"C:\seedling")   # valid JSON via json.dumps
+    assert config.is_multi_user() is True
+    code, out = run_cli("help")
+    assert "shared multi-user install" in out
+    assert "seed help --admin" in out
+
+
+def test_summary_shows_install_type(run_cli, home):
+    from seedling import config
+    code, out = run_cli("summary")
+    assert "install type: single-user" in out
+    config.set_value("shared_root", r"C:\seedling")
+    code, out = run_cli("summary")
+    assert "install type: multi-user" in out and r"C:\seedling" in out
+
+
+def test_is_multi_user_ignores_corrupt_settings(home):
+    from seedling import config, paths
+    paths.ensure_layout()
+    paths.CONFIG_FILE.write_text("{ broken json")
+    assert config.is_multi_user() is False  # never raises
 
 
 def test_unknown_command_exits_nonzero(run_cli):

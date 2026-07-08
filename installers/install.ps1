@@ -85,8 +85,12 @@ $SeedlingHome = if ($env:SEEDLING_HOME) {
 
 # {user} -> the installing user's login name, so a shared install root
 # (e.g. C:\seedling\{user}) gives every user a private, conflict-free folder.
+# When the token is used, record the shared root (the parent of the per-user
+# home) so the elevated admin-* commands know this is a multi-user install.
+$SeedlingSharedRoot = $null
 if ($SeedlingHome -like "*{user}*") {
     $SeedlingHome = $SeedlingHome -replace [regex]::Escape("{user}"), $env:USERNAME
+    $SeedlingSharedRoot = Split-Path -Parent $SeedlingHome
 }
 
 $InstalledFromDir = $null
@@ -260,6 +264,7 @@ if (-not (Test-Path $SettingsFile)) {
         $seed["native_tls"] = $true
     }
     if ($CertBundle) { $seed["ca_cert"] = "$CertBundle" }
+    if ($SeedlingSharedRoot) { $seed["shared_root"] = "$SeedlingSharedRoot" }
     if ($seed.Count -gt 0) {
         $seed | ConvertTo-Json | Set-Content -Path $SettingsFile -Encoding UTF8
         Info "Seeded seedling settings from seedling.conf"

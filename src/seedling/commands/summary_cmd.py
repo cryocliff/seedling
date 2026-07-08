@@ -59,6 +59,11 @@ def run(args) -> int:
     home = paths.HOME
 
     print(colors.bold("seedling summary") + f"  ({home})")
+    shared_root = config.get("shared_root")
+    if shared_root:
+        print(f"  install type: multi-user (shared root: {shared_root})")
+    else:
+        print("  install type: single-user")
     if not home.exists():
         print("Nothing is installed yet -- run the installer first.")
         return 0

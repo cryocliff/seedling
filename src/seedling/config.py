@@ -43,6 +43,10 @@ KNOWN_KEYS: dict[str, str] = {
         "Path to a PEM CA bundle trusted for HTTPS (uv downloads, git "
         "clones, and seedling's own downloads). Normally installed "
         "automatically from vendor/certs/ in the distributed repo copy."),
+    "shared_root": (
+        "The directory holding per-user seedling homes, recorded at install "
+        "time when SEEDLING_HOME_DIR used a {user} token. Only set for "
+        "shared multi-user installs; enables the admin-* commands."),
 }
 
 _DEFAULTS: dict[str, Any] = {
@@ -54,6 +58,7 @@ _DEFAULTS: dict[str, Any] = {
     "package_index": None,
     "native_tls": None,
     "ca_cert": None,
+    "shared_root": None,
 }
 
 
@@ -109,6 +114,19 @@ def unset(key: str) -> None:
 
 def default_of(key: str) -> Any:
     return _DEFAULTS.get(key)
+
+
+def is_multi_user() -> bool:
+    """True when this is a shared multi-user install -- i.e. SEEDLING_HOME_DIR
+    used a {user} token, so `shared_root` was recorded at install time.
+    Deliberately side-effect-free (reads the file directly, never creates
+    the layout) so it's safe to call from the help path."""
+    try:
+        if not paths.CONFIG_FILE.exists():
+            return False
+        return bool(json.loads(paths.CONFIG_FILE.read_text()).get("shared_root"))
+    except (json.JSONDecodeError, OSError):
+        return False
 
 
 def set_default_base(tag: str) -> None:
