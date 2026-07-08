@@ -239,6 +239,9 @@ could actually work. On failure, this window is skipped and the original
 │   ├── cache/
 │   │   └── uv/                   uv's package/interpreter download cache --
 │   │                             kept in here instead of ~/.cache / %LOCALAPPDATA%
+│   ├── certs/
+│   │   └── ca-bundle.pem         corporate CA bundle, only on org installs
+│   │                             that ship one in vendor/certs/ (see OFFLINE.md)
 │   └── shell/
 │       ├── seed.sh                sourced by bash/zsh
 │       └── seed.ps1                dot-sourced by PowerShell
@@ -973,7 +976,8 @@ has its interpreter and its base Python still exists, the configured
 defaults (`default_base`, `default_venv`) point at things that exist, an
 `update_source` is recorded (and, for a directory source, looks like a
 seedling tree), any offline `python_mirror`/`package_index` directories
-exist, the `seed` shell hook is installed and not stale (a hook line
+and `ca_cert` bundle exist, the `seed` shell hook is installed and not
+stale (a hook line
 pointing at a deleted file gets a loud warning), and the log directory is
 writable.
 

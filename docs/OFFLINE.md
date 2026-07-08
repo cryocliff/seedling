@@ -16,7 +16,7 @@ any of this — they run `install.cmd` from the share and everything works.
 Everything is driven by **editing [`seedling.conf`](../seedling.conf)** in
 the copy of the repo you distribute — users never set environment
 variables or change anything on their machines. You provide **four
-things** (plus two optional ones):
+things** (plus three optional ones):
 
 | # | Component | What to provide |
 |---|-----------|-----------------|
@@ -26,6 +26,7 @@ things** (plus two optional ones):
 | 4 | Python packages | An internal index (Artifactory / Nexus / devpi) or a plain directory of wheels — set `SEEDLING_PACKAGE_INDEX` in `seedling.conf`; must include `hatchling` |
 | 5 | git *(optional)* | Drop MinGit in `vendor/git/`, or deploy git through your normal software channel |
 | 6 | VS Code *(optional)* | Drop a pre-seeded portable install in `vendor/vscode/` |
+| 7 | CA certificates *(optional)* | Drop your corporate CA's `.pem`/`.crt` files in `vendor/certs/` — bundled and trusted automatically |
 
 The conf values are recorded in seedling's settings at install time and
 applied automatically to every command from then on (visible and

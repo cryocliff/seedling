@@ -50,6 +50,7 @@ behavior in detail. This README is a quickstart. Command name: **`seed`**
 │   ├── config/settings.json    seedling's own small config (see `seed config`)
 │   ├── logs/                   one log file per day -- every command + its output
 │   ├── cache/uv/               uv's download cache, kept in here too
+│   ├── certs/                  CA bundle for org installs (from vendor/certs/)
 │   └── shell/                  the seed.sh / seed.ps1 your shell profile loads
 ├── python/
 │   ├── base/312/           `seed python 312`
