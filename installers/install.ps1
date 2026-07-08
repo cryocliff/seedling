@@ -148,7 +148,11 @@ if (Test-Path $SrcGit) { Remove-Item -Recurse -Force $SrcGit }
 #       vendor\uv\     (uv.exe, uvx too if present)     -> ~\seedling\system\bin\
 #       vendor\git\    (an extracted MinGit)            -> ~\seedling\extensions\git\
 #       vendor\vscode\ (a pre-seeded portable VS Code)  -> ~\seedling\extensions\vscode\
+#       vendor\certs\  (PEM CA certificates)            -> concatenated into
+#                       ~\seedling\system\certs\ca-bundle.pem and trusted for
+#                       all HTTPS (uv, git, seedling's own downloads)
 # ---------------------------------------------------------------------------
+$CertBundle = $null
 $VendorDir = Join-Path $SrcDir "vendor"
 if (Test-Path $VendorDir) {
     $vendorUv = Join-Path $VendorDir "uv"
@@ -167,6 +171,21 @@ if (Test-Path $VendorDir) {
         New-Item -ItemType Directory -Force -Path "$SeedlingHome\extensions\vscode" | Out-Null
         Copy-Item "$vendorVscode\*" -Destination "$SeedlingHome\extensions\vscode" -Recurse -Force
         Info "Using vendored VS Code from the install source."
+    }
+    $vendorCerts = Join-Path $VendorDir "certs"
+    if (Test-Path $vendorCerts) {
+        # Unlike the binaries above, the bundle is REBUILT on every install
+        # so certificate rotation propagates with a plain reinstall.
+        $certFiles = @(Get-ChildItem -Path $vendorCerts -File | Where-Object { $_.Extension -in ".pem", ".crt" })
+        if ($certFiles.Count -gt 0) {
+            New-Item -ItemType Directory -Force -Path "$SeedlingHome\system\certs" | Out-Null
+            $CertBundle = "$SeedlingHome\system\certs\ca-bundle.pem"
+            ($certFiles | ForEach-Object { (Get-Content $_.FullName -Raw).TrimEnd() }) -join "`n" |
+                Set-Content -Path $CertBundle -Encoding ASCII
+            Info "Installed the vendored CA certificate bundle."
+        } else {
+            Warn "vendor\certs exists but holds no .pem/.crt files; no CA bundle installed."
+        }
     }
     # The payloads live on the distribution source, not inside seedling's
     # private source copy -- a pre-seeded VS Code would otherwise bloat
@@ -231,6 +250,10 @@ if (-not (Test-Path $SettingsFile)) {
     # environment variables themselves.
     if ($Conf["SEEDLING_PYTHON_MIRROR"]) { $seed["python_mirror"] = $Conf["SEEDLING_PYTHON_MIRROR"] }
     if ($Conf["SEEDLING_PACKAGE_INDEX"]) { $seed["package_index"] = $Conf["SEEDLING_PACKAGE_INDEX"] }
+    if ($Conf["SEEDLING_NATIVE_TLS"] -and (@("yes", "1", "true") -contains $Conf["SEEDLING_NATIVE_TLS"].ToLower())) {
+        $seed["native_tls"] = $true
+    }
+    if ($CertBundle) { $seed["ca_cert"] = "$CertBundle" }
     if ($seed.Count -gt 0) {
         $seed | ConvertTo-Json | Set-Content -Path $SettingsFile -Encoding UTF8
         Info "Seeded seedling settings from seedling.conf"
@@ -248,6 +271,16 @@ function To-FileUrl($value) {
     if ($u -match "^[A-Za-z]:/") { return "file:///$u" }
     if ($u.StartsWith("/")) { return "file://$u" }
     return $value
+}
+
+# TLS first: the vendored CA bundle / native trust store must cover the
+# uv bootstrap and everything after it.
+if ($CertBundle -and -not $env:SSL_CERT_FILE) {
+    $env:SSL_CERT_FILE = $CertBundle
+    $env:GIT_SSL_CAINFO = $CertBundle
+}
+if ($Conf["SEEDLING_NATIVE_TLS"] -and (@("yes", "1", "true") -contains $Conf["SEEDLING_NATIVE_TLS"].ToLower()) -and -not $env:UV_NATIVE_TLS) {
+    $env:UV_NATIVE_TLS = "1"
 }
 
 if ($Conf["SEEDLING_PYTHON_MIRROR"] -and -not $env:UV_PYTHON_INSTALL_MIRROR) {

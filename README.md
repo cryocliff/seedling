@@ -231,6 +231,9 @@ flags or environment variables for users to remember:
   for interpreters and packages: URLs, or plain directories on a network
   share. Users never touch environment variables — the conf is applied
   automatically at install time and on every command after.
+- `SEEDLING_NATIVE_TLS` — trust the OS certificate store for internal
+  HTTPS hosts with a corporate CA; or ship the CA itself in
+  `vendor/certs/` and it's bundled and trusted automatically.
 
 The install source is written into seedling's own settings on first
 install (visible via `seed config`), so updates keep flowing from the

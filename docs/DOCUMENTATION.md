@@ -120,6 +120,11 @@ or environment variables:
   (the internet index is then disabled entirely). Seeds the
   `package_index` setting. See [OFFLINE.md](OFFLINE.md) for the full
   offline deployment guide.
+- `SEEDLING_NATIVE_TLS` (default: empty = bundled trust store) — set to
+  `yes` to trust the operating system's certificate store, for internal
+  HTTPS hosts signed by a machine-installed corporate CA (seeds the
+  `native_tls` setting). Alternatively, ship the CA itself in
+  `vendor/certs/` — see [OFFLINE.md](OFFLINE.md).
 
 How it's applied: both installers read `seedling.conf` at the repo root
 (a piped install reads the copy inside the repo it just cloned). The
@@ -958,6 +963,10 @@ setting with its current value and an explanation. The keys:
 - `python_mirror` / `package_index` — offline sources for interpreters
   and packages (a URL, or a plain directory on a share). Normally seeded
   from `seedling.conf` at install time; see [OFFLINE.md](OFFLINE.md).
+- `native_tls` / `ca_cert` — HTTPS trust for corporate-CA internal hosts:
+  the OS trust store, or a PEM bundle (normally installed automatically
+  from `vendor/certs/`). Applied to uv, git, and seedling's own downloads
+  on every command.
 
 `seed config get <key>` prints just the value (nothing at all when unset),
 so it's script-friendly. `unset` resets a key to its built-in default.

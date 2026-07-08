@@ -52,6 +52,8 @@ Every payload is a folder whose contents go to the destination:
 vendor/uv/         (uv.exe or uv, uvx too if present) -> ~/seedling/system/bin/
 vendor/git/        (an extracted MinGit)              -> ~/seedling/extensions/git/
 vendor/vscode/     (a pre-seeded portable VS Code)    -> ~/seedling/extensions/vscode/
+vendor/certs/      (corporate CA .pem/.crt files)     -> bundled into
+                    ~/seedling/system/certs/ca-bundle.pem and trusted everywhere
 ```
 
 Reinstalls never overwrite binaries already in place, `vendor/` is
@@ -238,6 +240,31 @@ experience — newest mirrored Python, `dev` venv with your default
 packages auto-activated, and `seed update-commands` flowing from the share
 — without their machine ever attempting to reach the internet, and without
 setting a single environment variable.
+
+---
+
+## HTTPS and corporate certificate authorities
+
+If your internal mirror/index/git host serves HTTPS signed by a corporate
+CA, plain installs fail certificate verification. Two independent fixes,
+both zero-touch for users:
+
+- **Ship the CA with the repo**: drop the `.pem`/`.crt` files into
+  `vendor/certs/`. The installer concatenates them into
+  `~/seedling/system/certs/ca-bundle.pem`, records it as the `ca_cert`
+  setting, and every seedling command then trusts it automatically —
+  uv downloads (`SSL_CERT_FILE`), git clones (`GIT_SSL_CAINFO`), and
+  seedling's own downloads all included. Unlike the binary payloads, the
+  bundle is **rebuilt on every install**, so certificate rotation
+  propagates with a plain reinstall.
+- **Use the OS trust store**: if IT already installs the corporate CA
+  machine-wide via policy, set `SEEDLING_NATIVE_TLS="yes"` in
+  `seedling.conf` instead — recorded as the `native_tls` setting and
+  applied to uv as `UV_NATIVE_TLS`.
+
+`seed status` verifies the recorded bundle still exists, and explicitly
+set `SSL_CERT_FILE`/`UV_NATIVE_TLS` environment variables always win over
+the settings.
 
 ---
 

@@ -23,6 +23,7 @@ import json
 from .. import colors, config, paths
 
 _LIST_KEYS = {"venv_default_packages"}
+_BOOL_KEYS = {"native_tls"}
 
 
 def _format_value(value) -> str:
@@ -36,6 +37,10 @@ def _format_value(value) -> str:
 def _parse_value(key: str, raw: str):
     if key in _LIST_KEYS:
         return [item.strip() for item in raw.split(",") if item.strip()]
+    if key in _BOOL_KEYS:
+        # Stored as a real bool -- the string "false" would otherwise be
+        # truthy when the setting is read back.
+        return raw.strip().lower() in ("1", "true", "yes", "on")
     return raw
 
 

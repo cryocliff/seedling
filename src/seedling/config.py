@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 from typing import Any
 
 from . import paths
@@ -33,6 +35,14 @@ KNOWN_KEYS: dict[str, str] = {
         "(Artifactory/Nexus/devpi), or a plain directory of wheels (e.g. a "
         "network share -- becomes the one and only package source, with "
         "the internet index disabled). Empty/null means pypi.org."),
+    "native_tls": (
+        "Use the operating system's certificate trust store for HTTPS "
+        "instead of the bundled one -- for internal mirrors/indexes whose "
+        "corporate CA is installed machine-wide by IT. true/false."),
+    "ca_cert": (
+        "Path to a PEM CA bundle trusted for HTTPS (uv downloads, git "
+        "clones, and seedling's own downloads). Normally installed "
+        "automatically from vendor/certs/ in the distributed repo copy."),
 }
 
 _DEFAULTS: dict[str, Any] = {
@@ -42,7 +52,24 @@ _DEFAULTS: dict[str, Any] = {
     "venv_default_packages": ["ipython", "ruff", "ipykernel"],
     "python_mirror": None,
     "package_index": None,
+    "native_tls": None,
+    "ca_cert": None,
 }
+
+
+def apply_runtime_env() -> None:
+    """Translate the TLS settings into THIS process's environment, once per
+    invocation (cli calls it before dispatching any command). Process-wide
+    rather than per-subprocess because three different consumers read the
+    same variables: uv (child process), git (child process), and seedling's
+    own urllib downloads (this process). Values already present in the
+    user's environment always win."""
+    ca_cert = get("ca_cert")
+    if ca_cert and Path(str(ca_cert)).expanduser().is_file():
+        os.environ.setdefault("SSL_CERT_FILE", str(ca_cert))
+        os.environ.setdefault("GIT_SSL_CAINFO", str(ca_cert))
+    if get("native_tls"):
+        os.environ.setdefault("UV_NATIVE_TLS", "1")
 
 
 def load() -> dict[str, Any]:

@@ -153,6 +153,16 @@ def _check_defaults() -> None:
               "reinstall the existing copy, not fetch newer versions; set one "
               "with `seed config set update_source <git-url-or-directory>`")
 
+    ca_cert = config.get("ca_cert")
+    if ca_cert:
+        if Path(str(ca_cert)).expanduser().is_file():
+            _ok(f"ca_cert bundle exists ({ca_cert})")
+        else:
+            _fail(f"config ca_cert file {ca_cert} doesn't exist -- HTTPS to "
+                  "your internal hosts will fail certificate verification; "
+                  "re-run the installer (which rebuilds the bundle from "
+                  "vendor/certs) or `seed config unset ca_cert`")
+
     # Offline sources: a directory-path value that doesn't exist means the
     # next `seed python`/`seed install` fails with an obscure uv error.
     for key in ("python_mirror", "package_index"):

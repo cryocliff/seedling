@@ -49,6 +49,7 @@ SEEDLING_AUTO_SETUP=""
 SEEDLING_AUTO_VSCODE=""
 SEEDLING_PYTHON_MIRROR=""
 SEEDLING_PACKAGE_INDEX=""
+SEEDLING_NATIVE_TLS=""
 CONF_FILE=""
 if [ -f "$REPO_ROOT/seedling.conf" ]; then
     CONF_FILE="$REPO_ROOT/seedling.conf"
@@ -142,7 +143,11 @@ rm -rf "$SRC_DIR/.git"
 #       vendor/uv/     (uv.exe / uv, uvx too if present) -> ~/seedling/system/bin/
 #       vendor/git/    (an extracted MinGit)             -> ~/seedling/extensions/git/
 #       vendor/vscode/ (a pre-seeded portable VS Code)   -> ~/seedling/extensions/vscode/
+#       vendor/certs/  (PEM CA certificates)             -> concatenated into
+#                       ~/seedling/system/certs/ca-bundle.pem and trusted for
+#                       all HTTPS (uv, git, seedling's own downloads)
 # ---------------------------------------------------------------------------
+CERT_BUNDLE=""
 if [ -d "$SRC_DIR/vendor" ]; then
     if [ -d "$SRC_DIR/vendor/uv" ] && [ ! -e "$SEEDLING_HOME/system/bin/uv" ] && [ ! -e "$SEEDLING_HOME/system/bin/uv.exe" ]; then
         cp -R "$SRC_DIR/vendor/uv/." "$SEEDLING_HOME/system/bin/"
@@ -158,6 +163,25 @@ if [ -d "$SRC_DIR/vendor" ]; then
         mkdir -p "$SEEDLING_HOME/extensions/vscode"
         cp -R "$SRC_DIR/vendor/vscode/." "$SEEDLING_HOME/extensions/vscode/"
         info "Using vendored VS Code from the install source."
+    fi
+    if [ -d "$SRC_DIR/vendor/certs" ]; then
+        # Unlike the binaries above, the bundle is REBUILT on every install
+        # so certificate rotation propagates with a plain reinstall.
+        mkdir -p "$SEEDLING_HOME/system/certs"
+        CERT_BUNDLE="$SEEDLING_HOME/system/certs/ca-bundle.pem"
+        : > "$CERT_BUNDLE"
+        for _cert in "$SRC_DIR/vendor/certs/"*.pem "$SRC_DIR/vendor/certs/"*.crt; do
+            [ -f "$_cert" ] || continue
+            cat "$_cert" >> "$CERT_BUNDLE"
+            printf '\n' >> "$CERT_BUNDLE"
+        done
+        if [ -s "$CERT_BUNDLE" ]; then
+            info "Installed the vendored CA certificate bundle."
+        else
+            rm -f "$CERT_BUNDLE"
+            CERT_BUNDLE=""
+            warn "vendor/certs exists but holds no .pem/.crt files; no CA bundle installed."
+        fi
     fi
     # The payloads live on the distribution source, not inside seedling's
     # private source copy -- a pre-seeded VS Code would otherwise bloat
@@ -244,6 +268,18 @@ if [ ! -f "$SETTINGS_FILE" ]; then
 "
         entries="$entries  \"package_index\": \"$(json_escape "$SEEDLING_PACKAGE_INDEX")\""
     fi
+    case "$SEEDLING_NATIVE_TLS" in
+        yes|YES|Yes|1|true|TRUE|True)
+            [ -n "$entries" ] && entries="$entries,
+"
+            entries="$entries  \"native_tls\": true"
+            ;;
+    esac
+    if [ -n "$CERT_BUNDLE" ]; then
+        [ -n "$entries" ] && entries="$entries,
+"
+        entries="$entries  \"ca_cert\": \"$(json_escape "$CERT_BUNDLE")\""
+    fi
     if [ -n "$entries" ]; then
         printf '{\n%s\n}\n' "$entries" > "$SETTINGS_FILE"
         info "Seeded seedling settings from seedling.conf"
@@ -264,6 +300,22 @@ to_file_url() {
         *)           printf '%s' "$_v" ;;
     esac
 }
+
+# TLS first: the vendored CA bundle / native trust store must cover the
+# uv bootstrap and everything after it.
+if [ -n "$CERT_BUNDLE" ] && [ -z "${SSL_CERT_FILE:-}" ]; then
+    SSL_CERT_FILE="$CERT_BUNDLE"
+    GIT_SSL_CAINFO="$CERT_BUNDLE"
+    export SSL_CERT_FILE GIT_SSL_CAINFO
+fi
+case "$SEEDLING_NATIVE_TLS" in
+    yes|YES|Yes|1|true|TRUE|True)
+        if [ -z "${UV_NATIVE_TLS:-}" ]; then
+            UV_NATIVE_TLS=1
+            export UV_NATIVE_TLS
+        fi
+        ;;
+esac
 
 if [ -n "$SEEDLING_PYTHON_MIRROR" ] && [ -z "${UV_PYTHON_INSTALL_MIRROR:-}" ]; then
     UV_PYTHON_INSTALL_MIRROR="$(to_file_url "$SEEDLING_PYTHON_MIRROR")"

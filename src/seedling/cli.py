@@ -4,7 +4,7 @@ import argparse
 import subprocess
 import sys
 
-from . import colors, paths, runlog
+from . import colors, config, paths, runlog
 from .commands import (
     activate_cmd,
     config_cmd,
@@ -266,6 +266,10 @@ def _dispatch_main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     paths.ensure_layout()
+    # TLS settings (private-CA bundle, native trust store) become process
+    # environment here, so uv, git, and seedling's own downloads all
+    # honor them without users ever setting variables themselves.
+    config.apply_runtime_env()
 
     dispatch = {
         "python": python_cmd.run,
