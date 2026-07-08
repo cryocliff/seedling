@@ -37,11 +37,32 @@ import os
 from pathlib import Path
 
 
+def _current_username() -> str:
+    """Login name, for the {user} placeholder. getpass.getuser() consults
+    USER/LOGNAME/LNAME/USERNAME then the password database -- covers every
+    platform seedling runs on."""
+    import getpass
+    try:
+        return getpass.getuser()
+    except Exception:
+        return os.environ.get("USERNAME") or os.environ.get("USER") or "user"
+
+
+def _expand_user_token(value: str) -> str:
+    """`{user}` -> the current username. Lets a shared install root give
+    each user their own conflict-free folder, e.g. C:\\seedling\\{user}.
+    The installers normally expand this before it reaches runtime; this is
+    the defensive net for a SEEDLING_HOME env var set directly."""
+    if "{user}" in value:
+        return value.replace("{user}", _current_username())
+    return value
+
+
 def seedling_home() -> Path:
     """Root of everything seedling manages. Overridable for testing via env var."""
     override = os.environ.get("SEEDLING_HOME")
     if override:
-        return Path(override).expanduser().resolve()
+        return Path(_expand_user_token(override)).expanduser().resolve()
     return Path.home() / "seedling"
 
 

@@ -80,6 +80,16 @@ else
     SEEDLING_HOME="$HOME/seedling"
 fi
 
+# {user} -> the installing user's login name, so a shared install root
+# (e.g. C:\seedling\{user}) gives every user a private, conflict-free
+# folder. git-bash may not set $USER, so fall back through $USERNAME/id.
+case "$SEEDLING_HOME" in
+    *"{user}"*)
+        _seed_user="${USER:-${USERNAME:-$(id -un 2>/dev/null || echo user)}}"
+        SEEDLING_HOME=$(printf '%s' "$SEEDLING_HOME" | sed "s/{user}/$_seed_user/g")
+        ;;
+esac
+
 INSTALLED_FROM_DIR=""
 CLONE_MODE=0
 if [ -f "$REPO_ROOT/src/pyproject.toml" ]; then

@@ -83,6 +83,12 @@ $SeedlingHome = if ($env:SEEDLING_HOME) {
     Join-Path $HOME "seedling"
 }
 
+# {user} -> the installing user's login name, so a shared install root
+# (e.g. C:\seedling\{user}) gives every user a private, conflict-free folder.
+if ($SeedlingHome -like "*{user}*") {
+    $SeedlingHome = $SeedlingHome -replace [regex]::Escape("{user}"), $env:USERNAME
+}
+
 $InstalledFromDir = $null
 $CloneMode = $false
 if ($HasLocalCheckout) {

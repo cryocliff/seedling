@@ -234,7 +234,9 @@ flags or environment variables for users to remember:
   a self-hosted GitHub Enterprise remote) **or a plain directory path**
   (a copy of this repo on a network drive — no git hosting needed at all).
 - `SEEDLING_HOME_DIR` — the folder everything seedling manages lives in
-  (default `~/seedling`).
+  (default `~/seedling`). For a **shared** install location, put `{user}`
+  in the path (`C:\seedling\{user}`) — it expands to each installer's login
+  name, so multiple users share the root without colliding.
 - `SEEDLING_VENV_DEFAULT_PACKAGES` — the packages preinstalled into every
   new venv (default `ipython,ruff,ipykernel`).
 - `SEEDLING_AUTO_SETUP` — whether the install finishes by setting up the

@@ -96,8 +96,12 @@ or environment variables:
   `seed update-commands` fetches updates. A git URL or a plain directory path.
 - `SEEDLING_HOME_DIR` (default: `~/seedling`) — the folder everything
   seedling manages lives in. A leading `~` means the installing user's
-  home directory. The shell integration exports `SEEDLING_HOME` so
-  seed-cli finds a custom location at runtime too.
+  home directory. A `{user}` token expands to the installing user's login
+  name, so a **shared** install root gives each user a private,
+  conflict-free folder: `SEEDLING_HOME_DIR="C:\seedling\{user}"` puts
+  alice in `C:\seedling\alice`, bob in `C:\seedling\bob`. (The installer
+  resolves the token before writing anything, and the shell integration
+  exports the resolved `SEEDLING_HOME` so seed-cli finds it at runtime.)
 - `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff,ipykernel`) —
   comma-separated packages installed into every new venv (seeds the
   `venv_default_packages` setting).
@@ -137,6 +141,37 @@ choices survive reinstalls. Resolution order for the install source:
 1. `SEEDLING_REPO` environment variable (one-run override)
 2. `SEEDLING_REPO_URL` from `seedling.conf`
 3. the baked-in public default (what the piped one-liner uses)
+
+### Shared-machine (multi-user) installs
+
+By default seedling lives under each user's home (`~/seedling`), so
+multiple users on one machine never interfere. If you'd rather put it on a
+shared drive or a common folder — a lab computer, a multi-user server, or
+just to keep it off roaming profiles — point `SEEDLING_HOME_DIR` at that
+location with a `{user}` token so each person still gets a private,
+conflict-free copy.
+
+For example, to install every user under `C:\seedling\<their-name>`, set in
+the distributed `seedling.conf`:
+
+```
+SEEDLING_HOME_DIR="C:\seedling\{user}"
+```
+
+Then when each user runs `install.cmd` from the share:
+
+```
+alice  ->  C:\seedling\alice\   (her interpreters, venvs, config, logs)
+bob    ->  C:\seedling\bob\
+carol  ->  C:\seedling\carol\
+```
+
+The installer resolves `{user}` to the login name before writing anything,
+and bakes the resolved path into that user's shell hook — so `seed` always
+targets their own folder, and `seed purge` only ever touches theirs.
+Without the token, everyone would share one `C:\seedling` and collide;
+with it, the shared root just holds one subfolder per user. (The default
+`~/seedling` needs no token — a home directory is already per-user.)
 
 ### Installing from a different source, for one run
 
