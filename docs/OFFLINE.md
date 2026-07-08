@@ -72,7 +72,7 @@ and the folder is gitignored — it exists only on distribution media.
 | CPython interpreters | github.com (python-build-standalone releases) | `seed python`; the installer's default-environment setup; first `uv tool install` if no Python exists on the machine |
 | Python packages (incl. `hatchling` to build seed-cli, and the default venv packages `ipython`/`ruff`) | pypi.org | Install; `seed venv`; `seed install`; `seed update-commands` |
 | MinGit (Windows only) | github.com (git-for-windows releases) | First `seed clone-repo` if no git is found |
-| VS Code + extensions | update.code.visualstudio.com / marketplace.visualstudio.com | First `seed vscode` / `seed open-repo` |
+| VS Code + extensions | update.code.visualstudio.com / marketplace.visualstudio.com | First `seed vscode` / `seed vscode-repo` |
 
 ---
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
 
@@ -47,7 +48,8 @@ def clone(args) -> int:
 
     print(f"Cloned '{name}'.")
     print(f"  seed cd-repo {name}        # jump into it (git commands work there)")
-    print(f"  seed open-repo {name}      # open it in VS Code")
+    print(f"  seed vscode-repo {name}    # open it in VS Code")
+    print(f"  seed open-repo {name}      # open it in the file manager")
     print(f"  seed install-repo {name}   # install its dependencies into the active venv")
     return 0
 
@@ -154,9 +156,35 @@ def cd_repo(args) -> int:
 
 
 def open_repo(args) -> int:
+    """`seed open-repo [name]` -- open a cloned repo (or the repos folder
+    itself) in the OS file manager. For opening in VS Code, that's
+    `seed vscode-repo`."""
+    name = getattr(args, "name", None)
+    target = paths.repo_dir(name) if name else paths.REPO_DIR
+    if not target.exists():
+        if name:
+            print(f"No repo named '{name}' found in {paths.REPO_DIR}")
+        else:
+            print(f"No repos cloned yet ({paths.REPO_DIR} doesn't exist). "
+                  "Run: seed clone-repo <git-url>")
+        return 1
+
+    print(f"Opening in the file manager -> {target}")
+    system = platform.system()
+    if system == "Windows":
+        os.startfile(str(target))  # Explorer; returns immediately
+    elif system == "Darwin":
+        subprocess.Popen(["open", str(target)], start_new_session=True)
+    else:
+        subprocess.Popen(["xdg-open", str(target)], start_new_session=True)
+    return 0
+
+
+def vscode_repo(args) -> int:
+    """`seed vscode-repo <name>` -- open a cloned repo in VS Code."""
     name = getattr(args, "name", None)
     if not name:
-        print("Usage: seed open-repo <name>")
+        print("Usage: seed vscode-repo <name>")
         return 1
 
     target = paths.repo_dir(name)

@@ -49,7 +49,8 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("clone-repo", "<git-url>", "Clone a repo into ~/seedling/repo"),
         ("list-repos", "", "List cloned repos"),
         ("cd-repo", "[name]", "cd into a cloned repo (or the repos folder)"),
-        ("open-repo", "<name>", "Open a repo in VS Code"),
+        ("vscode-repo", "<name>", "Open a repo in VS Code"),
+        ("open-repo", "[name]", "Open a repo in the file manager"),
         ("install-repo", "<name>", "Install a repo's dependencies into the active venv"),
     ]),
     ("VS Code", [
@@ -185,8 +186,12 @@ def build_parser() -> argparse.ArgumentParser:
                                    help="Delete a cloned repo")
     p_remove_repo.add_argument("name", nargs="?", help="Name of the repo to delete")
 
-    p_open_repo = sub.add_parser("open-repo", help="Open a cloned repo in VS Code")
+    p_open_repo = sub.add_parser(
+        "open-repo", help="Open a cloned repo (or ~/seedling/repo) in the file manager")
     p_open_repo.add_argument("name", nargs="?", help="Name of the repo to open")
+
+    p_vscode_repo = sub.add_parser("vscode-repo", help="Open a cloned repo in VS Code")
+    p_vscode_repo.add_argument("name", nargs="?", help="Name of the repo to open")
 
     p_install_repo = sub.add_parser(
         "install-repo",
@@ -296,6 +301,7 @@ def _dispatch_main(argv: list[str]) -> int:
         "cd-repo": repo_cmd.cd_repo,
         "remove-repo": repo_cmd.remove,
         "open-repo": repo_cmd.open_repo,
+        "vscode-repo": repo_cmd.vscode_repo,
         "install-repo": repo_cmd.install_repo,
         "remove-user": remove_cmd.run,
         "remove-venvs": venv_remove_cmd.run_all,

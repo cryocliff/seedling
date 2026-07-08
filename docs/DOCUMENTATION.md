@@ -752,14 +752,26 @@ seed cd-repo myproject
 seed cd-repo
 ```
 
-### `seed open-repo <name>`
+### `seed vscode-repo <name>`
 
 Opens a cloned repo in VS Code — installing VS Code first if it isn't
 already (same one-time setup as `seed vscode`). Shares the same CLI-entry-
 point, detached-process opening logic as `seed vscode`.
 
 ```
+seed vscode-repo some-project
+```
+
+### `seed open-repo [name]`
+
+Opens a cloned repo in the **operating system's file manager** (Explorer
+on Windows, Finder on macOS, your desktop's default elsewhere). With no
+name, opens `~/seedling/repo` itself. For opening in VS Code, use
+`seed vscode-repo`.
+
+```
 seed open-repo some-project
+seed open-repo
 ```
 
 ### `seed install-repo <name>`
@@ -1093,7 +1105,7 @@ into.
 
 ## Known limits
 
-- `seed vscode`/`seed open-repo` on macOS unpack the official `.app` bundle
+- `seed vscode`/`seed vscode-repo` on macOS unpack the official `.app` bundle
   and launch its embedded CLI binary; this is the least-tested of the
   three platforms.
 - `seed python` version resolution assumes CPython (uv's default); PyPy and
