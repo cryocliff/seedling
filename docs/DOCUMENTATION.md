@@ -98,7 +98,7 @@ or environment variables:
   seedling manages lives in. A leading `~` means the installing user's
   home directory. The shell integration exports `SEEDLING_HOME` so
   seed-cli finds a custom location at runtime too.
-- `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff,ipykernel,pip`) —
+- `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff,ipykernel`) —
   comma-separated packages installed into every new venv (seeds the
   `venv_default_packages` setting).
 - `SEEDLING_AUTO_SETUP` (default: `yes`) — after installing seedling
@@ -480,7 +480,7 @@ seed remove-python 311
 
 Creates a virtual environment at `~/seedling/python/venvs/<name>` via
 `uv venv --python <interpreter>`, then installs the default packages
-(`ipython`, `ruff`, `ipykernel`, and `pip`, unless changed via
+(`ipython`, `ruff`, and `ipykernel`, unless changed via
 `seed config set venv_default_packages ...`) into it.
 
 - `--python <tag>` selects which installed base Python to build from
@@ -954,7 +954,7 @@ setting with its current value and an explanation. The keys:
   automatically at install time; unset means updates can only reinstall
   the existing copy.
 - `venv_default_packages` — the packages installed into every new venv
-  (default: `ipython, ruff, ipykernel, pip`). Takes comma-separated input.
+  (default: `ipython, ruff, ipykernel`). Takes comma-separated input.
 - `python_mirror` / `package_index` — offline sources for interpreters
   and packages (a URL, or a plain directory on a share). Normally seeded
   from `seedling.conf` at install time; see [OFFLINE.md](OFFLINE.md).
