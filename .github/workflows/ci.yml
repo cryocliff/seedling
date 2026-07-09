@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# One in-flight run per ref; a new push cancels the previous one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the primary target; Linux proves the cross-platform
+        # (bash installer, POSIX paths) code paths. 3.9 is the requires-python
+        # floor; 3.12 is what development happens on.
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.9", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv provides both the test runner (uvx pytest) and the interpreter
+      # under test (--python), and is what seedling itself shells out to, so
+      # the needs_uv tests exercise the real thing.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Runners already ship git, bash (git-bash on Windows), and PowerShell,
+      # so the needs_git / needs_bash / needs_powershell tests run rather than
+      # skip. (On Linux only pwsh exists, not `powershell`, so the three
+      # PowerShell tests skip there by design.)
+      - name: Run tests
+        run: uvx --python ${{ matrix.python }} pytest -q

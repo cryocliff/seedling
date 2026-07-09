@@ -1,5 +1,7 @@
 # seedling 🌱
 
+[![CI](https://github.com/cryocliff/seedling/actions/workflows/ci.yml/badge.svg)](https://github.com/cryocliff/seedling/actions/workflows/ci.yml)
+
 **A clean implementation of Python tool management, for people who prefer
 organization.** Interpreters, venvs, editor, cloned repos, config, and logs
 all live in one tidy folder — `~/seedling` — instead of being scattered
