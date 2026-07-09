@@ -32,6 +32,18 @@ def test_parses_commands_output_and_exit_codes(home):
     assert entries[1]["output"] == "Created venv dev"
 
 
+def test_duration_computed_from_start_and_exit_timestamps(home):
+    _write_log("2026-07-08",
+               "\n=== [2026-07-08 09:00:01] seed venv dev\nout\n"
+               "=== [09:00:13] exit code 0\n")
+    entries = lv.collect_entries()
+    assert entries[0]["dur"] == 12  # 09:00:13 - 09:00:01
+    # an entry with no exit line has no duration
+    _write_log("2026-07-08",
+               "\n=== [2026-07-08 09:00:01] seed python\nout\n")
+    assert lv.collect_entries()[0]["dur"] is None
+
+
 def test_entry_without_exit_line_is_still_parsed(home):
     # A hard-killed process never writes its exit line.
     _write_log("2026-07-08",

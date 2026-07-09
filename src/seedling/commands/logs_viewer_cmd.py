@@ -90,11 +90,12 @@ def _parse_file(path: Path, kind: str = "command") -> list[dict]:
             if current is not None:
                 entries.append(_finalize(current, kind))
             current = {"ts": start.group(1), "cmd": start.group(2),
-                       "out": [], "exit": None}
+                       "out": [], "exit": None, "exit_time": None}
             continue
         exit_match = _EXIT_RE.match(line)
         if exit_match and current is not None and current["exit"] is None:
             current["exit"] = int(exit_match.group(2))
+            current["exit_time"] = exit_match.group(1)
             entries.append(_finalize(current, kind))
             current = None
             continue
@@ -105,10 +106,27 @@ def _parse_file(path: Path, kind: str = "command") -> list[dict]:
     return entries
 
 
+def _duration(start_ts: str, exit_time: str | None) -> int | None:
+    """Seconds between a command's start stamp ('YYYY-MM-DD HH:MM:SS') and its
+    exit stamp ('HH:MM:SS'). None when there's no exit line, or the clock
+    appears to have gone backwards (e.g. the run crossed midnight)."""
+    if not exit_time:
+        return None
+    try:
+        start = _dt.datetime.strptime(start_ts, "%Y-%m-%d %H:%M:%S")
+        h, m, s = (int(x) for x in exit_time.split(":"))
+        end = start.replace(hour=h, minute=m, second=s)
+    except (ValueError, TypeError):
+        return None
+    secs = (end - start).total_seconds()
+    return int(secs) if secs >= 0 else None
+
+
 def _finalize(entry: dict, kind: str = "command") -> dict:
     out = "\n".join(entry["out"]).strip("\n")
     return {"ts": entry["ts"], "cmd": entry["cmd"], "output": out,
-            "exit": entry["exit"], "kind": kind}
+            "exit": entry["exit"], "kind": kind,
+            "dur": _duration(entry["ts"], entry.get("exit_time"))}
 
 
 def _install_files(days: int | None) -> list[Path]:
@@ -147,7 +165,7 @@ def _parse_install_file(path: Path) -> list[dict]:
     else:
         ts = "0000-00-00 00:00:00"
     return [{"ts": ts, "cmd": "installer (bootstrap)", "output": text.strip("\n"),
-             "exit": None, "kind": "install"}]
+             "exit": None, "kind": "install", "dur": None}]
 
 
 def collect_entries(days: int | None = None) -> list[dict]:
@@ -229,9 +247,11 @@ def run(args) -> int:
     return 0
 
 
-# The page: dark/light via prefers-color-scheme, a search box, a failures-only
-# toggle, and collapsible output per command. __DATA__ is replaced with the
-# JSON payload before writing.
+# The page: a dense master-detail table (Date | Time | Status | Command |
+# Duration) on the left; clicking a row shows that command's full output in
+# the pane on the right. Filters (search, failures-only, date range) live in
+# the header. Dark/light via prefers-color-scheme. __DATA__ is replaced with
+# the JSON payload before writing.
 _TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -243,82 +263,93 @@ _TEMPLATE = r"""<!DOCTYPE html>
     color-scheme: light dark;  /* native date pickers follow the theme */
     --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --border: #d0d7de;
     --card: #f6f8fa; --accent: #0969da; --ok: #1a7f37; --fail: #cf222e;
-    --code-bg: #f6f8fa;
+    --code-bg: #f6f8fa; --sel: #ddf4ff; --hover: rgba(127,127,127,.07);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --border: #30363d;
       --card: #161b22; --accent: #4493f8; --ok: #3fb950; --fail: #f85149;
-      --code-bg: #010409;
+      --code-bg: #010409; --sel: #182f4d; --hover: rgba(127,127,127,.1);
     }
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    margin: 0; background: var(--bg); color: var(--fg);
+    margin: 0; background: var(--bg); color: var(--fg); overflow: hidden;
+    display: flex; flex-direction: column;
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   }
-  header {
-    position: sticky; top: 0; background: var(--bg);
-    border-bottom: 1px solid var(--border); padding: 16px 20px; z-index: 1;
-  }
-  h1 { margin: 0 0 4px; font-size: 18px; }
+  header { flex: none; border-bottom: 1px solid var(--border); padding: 12px 16px; }
+  h1 { margin: 0; font-size: 16px; display: inline; }
   h1 .seed { color: var(--accent); }
-  .meta { color: var(--muted); font-size: 12px; }
-  .controls { margin-top: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .meta { color: var(--muted); font-size: 12px; margin-left: 8px; }
+  .controls { margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   #search {
-    flex: 1; min-width: 200px; padding: 7px 10px; border: 1px solid var(--border);
-    border-radius: 6px; background: var(--card); color: var(--fg); font-size: 14px;
+    flex: 1; min-width: 180px; padding: 6px 9px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--card); color: var(--fg); font-size: 13px;
   }
   label.toggle { color: var(--muted); font-size: 13px; user-select: none; cursor: pointer; }
   .rangelabel { color: var(--muted); font-size: 13px; }
   input[type=date] {
-    padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
-    background: var(--card); color: var(--fg); font-size: 13px;
+    padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--card); color: var(--fg); font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   input[type=date]:disabled { opacity: .5; }
   .dash { color: var(--muted); }
   .preset {
-    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
-    background: var(--card); color: var(--fg); font-size: 13px; cursor: pointer;
+    padding: 5px 9px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--card); color: var(--fg); font-size: 12px; cursor: pointer;
   }
   .preset:hover { border-color: var(--accent); }
   .preset.active { border-color: var(--accent); color: var(--accent); }
-  main { padding: 12px 20px 60px; max-width: 1100px; margin: 0 auto; }
-  .day { color: var(--muted); font-size: 12px; text-transform: uppercase;
-         letter-spacing: .04em; margin: 20px 0 8px; }
-  .entry { border: 1px solid var(--border); border-radius: 8px; margin: 8px 0;
-           overflow: hidden; background: var(--card); }
-  .entry.hidden { display: none; }
-  .row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; }
-  .row:hover { background: rgba(127,127,127,.06); }
-  .badge { flex: none; font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-           padding: 4px 7px; border-radius: 20px; min-width: 34px; text-align: center; }
+
+  .split { flex: 1; display: flex; min-height: 0; }
+  .tablewrap { flex: 1.25; overflow: auto; border-right: 1px solid var(--border); position: relative; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  thead th {
+    position: sticky; top: 0; z-index: 1; background: var(--bg); text-align: left;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+    color: var(--muted); padding: 7px 8px; border-bottom: 1px solid var(--border);
+  }
+  th.r, td.dur { text-align: right; }
+  tbody td {
+    padding: 4px 8px; font-size: 12.5px; border-bottom: 1px solid var(--border);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--hover); }
+  tbody tr.selected { background: var(--sel); }
+  td.date, td.time, td.dur { color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  td.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .badge { display: inline-block; min-width: 22px; text-align: center; padding: 2px 6px;
+    border-radius: 10px; font: 600 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
   .badge.ok { color: #fff; background: var(--ok); }
   .badge.fail { color: #fff; background: var(--fail); }
   .badge.unknown { color: var(--muted); border: 1px solid var(--border); }
-  .kindtag { flex: none; font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-             text-transform: uppercase; letter-spacing: .04em; color: var(--accent);
-             border: 1px solid var(--accent); border-radius: 4px; padding: 3px 5px; }
-  .cmd { flex: 1; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
-         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cmd .seed { color: var(--muted); }
-  .time { flex: none; color: var(--muted); font-size: 12px; }
-  .caret { flex: none; color: var(--muted); transition: transform .12s; }
-  .entry.open .caret { transform: rotate(90deg); }
-  pre.output { margin: 0; padding: 12px 14px; border-top: 1px solid var(--border);
-    background: var(--code-bg); font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
-    white-space: pre-wrap; word-break: break-word; display: none; }
-  .entry.open pre.output { display: block; }
-  pre.output.empty { color: var(--muted); font-style: italic; }
-  .empty-state { text-align: center; color: var(--muted); padding: 60px 20px; }
-  mark { background: #ffd33d; color: #000; border-radius: 2px; }
+  .kindtag { font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-transform: uppercase; letter-spacing: .03em; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 3px; padding: 2px 4px; margin-right: 6px; }
+
+  .detail { flex: 1; overflow: auto; padding: 16px 18px; }
+  .dcmd { font: 600 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .dmeta { color: var(--muted); font-size: 12px; margin: 8px 0 14px;
+    display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; }
+  .detail pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; margin: 0; white-space: pre-wrap; word-break: break-word;
+    font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .placeholder { color: var(--muted); text-align: center; margin-top: 15vh; font-size: 13px; }
+  .empty-state { position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; color: var(--muted); font-size: 13px; }
+  .empty-state[hidden] { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <h1><span class="seed">seed</span> command logs</h1>
-  <div class="meta" id="meta"></div>
+  <h1><span class="seed">seed</span> command logs</h1><span class="meta" id="meta"></span>
   <div class="controls">
     <input id="search" type="search" placeholder="Filter by command or output ...">
     <label class="toggle"><input type="checkbox" id="failonly"> failures only</label>
@@ -334,7 +365,22 @@ _TEMPLATE = r"""<!DOCTYPE html>
     <input type="date" id="to" aria-label="To date">
   </div>
 </header>
-<main id="list"></main>
+<div class="split">
+  <div class="tablewrap">
+    <table>
+      <colgroup>
+        <col style="width:96px"><col style="width:74px"><col style="width:60px">
+        <col><col style="width:76px">
+      </colgroup>
+      <thead><tr>
+        <th>Date</th><th>Time</th><th>Status</th><th>Command</th><th class="r">Duration</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty-state" id="empty" hidden></div>
+  </div>
+  <div class="detail" id="detail"></div>
+</div>
 <script>
 const PAYLOAD = __DATA__;
 const entries = PAYLOAD.entries;
@@ -342,7 +388,9 @@ document.getElementById("meta").textContent =
   entries.length + " command" + (entries.length === 1 ? "" : "s") +
   " · " + PAYLOAD.home + " · generated " + PAYLOAD.generated;
 
-const list = document.getElementById("list");
+const rows = document.getElementById("rows");
+const detail = document.getElementById("detail");
+const empty = document.getElementById("empty");
 const search = document.getElementById("search");
 const failonly = document.getElementById("failonly");
 
@@ -352,81 +400,100 @@ function badgeFor(exit) {
   b.textContent = exit === null ? "?" : String(exit);
   return b;
 }
+function fmtDur(s) {
+  if (s == null) return "";
+  if (s === 0) return "<1s";
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60), sec = Math.round(s % 60);
+  return sec ? m + "m " + sec + "s" : m + "m";
+}
+function cell(cls, text) {
+  const td = document.createElement("td");
+  td.className = cls; if (text != null) td.textContent = text;
+  return td;
+}
 
-// Build the DOM once; filtering just toggles a .hidden class.
-const nodes = [];
-let lastDay = null;
-for (const e of entries) {
-  const day = e.ts.slice(0, 10);
-  if (day !== lastDay) {
-    const h = document.createElement("div");
-    h.className = "day"; h.textContent = day; h.dataset.day = day;
-    list.appendChild(h); lastDay = day;
-  }
-  const entry = document.createElement("div");
-  entry.className = "entry" + (e.exit !== 0 && e.exit !== null ? " open" : "");
-
-  const row = document.createElement("div");
-  row.className = "row";
-  row.appendChild(badgeFor(e.exit));
-
+// Build every row once; filtering just toggles each row's display.
+const nodes = entries.map((e, i) => {
+  const tr = document.createElement("tr");
+  tr.appendChild(cell("date", e.ts.slice(0, 10)));
+  tr.appendChild(cell("time", e.ts.slice(11)));
+  const status = cell("status"); status.appendChild(badgeFor(e.exit));
+  tr.appendChild(status);
+  const cmd = cell("cmd");
   if (e.kind === "install") {
     const tag = document.createElement("span");
     tag.className = "kindtag"; tag.textContent = "setup";
-    row.appendChild(tag);
+    cmd.appendChild(tag);
   }
+  cmd.appendChild(document.createTextNode(e.cmd));
+  cmd.title = e.cmd;
+  tr.appendChild(cmd);
+  tr.appendChild(cell("dur", fmtDur(e.dur)));
+  tr.addEventListener("click", () => select(i));
+  rows.appendChild(tr);
+  return { tr, e, text: (e.cmd + "\n" + e.output).toLowerCase(),
+           fail: e.exit !== 0 && e.exit !== null, day: e.ts.slice(0, 10) };
+});
 
-  const cmd = document.createElement("span");
-  cmd.className = "cmd"; cmd.textContent = e.cmd;
-  row.appendChild(cmd);
-
-  const time = document.createElement("span");
-  time.className = "time"; time.textContent = e.ts.slice(11);
-  row.appendChild(time);
-
-  const caret = document.createElement("span");
-  caret.className = "caret"; caret.textContent = "›";
-  row.appendChild(caret);
-
+let selected = -1;
+function select(i) {
+  if (selected >= 0 && nodes[selected]) nodes[selected].tr.classList.remove("selected");
+  selected = i;
+  if (i < 0) { renderDetail(null); return; }
+  nodes[i].tr.classList.add("selected");
+  nodes[i].tr.scrollIntoView({ block: "nearest" });
+  renderDetail(entries[i]);
+}
+function metaSpan(text) {
+  const s = document.createElement("span"); s.textContent = text; return s;
+}
+function renderDetail(e) {
+  detail.textContent = "";  // clear; content rebuilt with textContent (injection-safe)
+  if (!e) {
+    const p = document.createElement("div");
+    p.className = "placeholder";
+    p.textContent = entries.length ? "Select a command to see its output"
+                                   : "No commands have been logged yet.";
+    detail.appendChild(p);
+    return;
+  }
+  const cmd = document.createElement("div");
+  cmd.className = "dcmd"; cmd.textContent = e.cmd;
+  const meta = document.createElement("div");
+  meta.className = "dmeta";
+  const badge = badgeFor(e.exit);
+  meta.appendChild(badge);
+  meta.appendChild(metaSpan(e.ts));
+  meta.appendChild(metaSpan(e.exit === null ? "no exit code" : "exit code " + e.exit));
+  if (e.dur != null) meta.appendChild(metaSpan("took " + fmtDur(e.dur)));
+  if (e.kind === "install") meta.appendChild(metaSpan("bootstrap installer"));
   const pre = document.createElement("pre");
-  pre.className = "output" + (e.output ? "" : " empty");
   pre.textContent = e.output || "(no output)";
-
-  row.addEventListener("click", () => entry.classList.toggle("open"));
-  entry.appendChild(row);
-  entry.appendChild(pre);
-  list.appendChild(entry);
-  nodes.push({ entry, day, text: (e.cmd + "\n" + e.output).toLowerCase(),
-               fail: e.exit !== 0 && e.exit !== null });
+  detail.append(cmd, meta, pre);
 }
 
-// Date range: all entries are embedded, so range selection is pure
-// client-side filtering. ISO day strings (YYYY-MM-DD) compare correctly as
-// plain text, so no Date objects are needed for the comparisons.
+// --- date range (all entries embedded; filtering is pure client-side) ---
 const fromEl = document.getElementById("from");
 const toEl = document.getElementById("to");
 const presets = [...document.querySelectorAll(".preset")];
 let minDay = null, maxDay = null;
 if (entries.length) {
   const days = entries.map(e => e.ts.slice(0, 10)).sort();
-  minDay = days[0];
-  maxDay = days[days.length - 1];
+  minDay = days[0]; maxDay = days[days.length - 1];
   for (const el of [fromEl, toEl]) { el.min = minDay; el.max = maxDay; }
   fromEl.value = minDay; toEl.value = maxDay;
 } else {
   fromEl.disabled = toEl.disabled = true;
 }
-
 function addDays(iso, n) {
   const d = new Date(iso + "T00:00:00");
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
 }
-
 function markPreset(active) {
   for (const b of presets) b.classList.toggle("active", b === active);
 }
-
 for (const btn of presets) {
   btn.addEventListener("click", () => {
     if (!maxDay) return;
@@ -434,38 +501,29 @@ for (const btn of presets) {
     let from = (n === 0) ? minDay : addDays(maxDay, -(n - 1));
     if (from < minDay) from = minDay;   // don't run before the oldest log
     fromEl.value = from; toEl.value = maxDay;
-    markPreset(btn);
-    apply();
+    markPreset(btn); apply();
   });
 }
-// Editing a date by hand clears the highlighted preset.
 for (const el of [fromEl, toEl]) el.addEventListener("change", () => { markPreset(null); apply(); });
 
 function apply() {
   const q = search.value.trim().toLowerCase();
   const onlyFail = failonly.checked;
   const from = fromEl.value, to = toEl.value;
-  let shown = 0;
-  for (const n of nodes) {
+  let shown = 0, firstVisible = -1;
+  nodes.forEach((n, i) => {
     const inRange = (!from || n.day >= from) && (!to || n.day <= to);
     const ok = inRange && (!q || n.text.includes(q)) && (!onlyFail || n.fail);
-    n.entry.classList.toggle("hidden", !ok);
-    if (ok) shown++;
+    n.tr.style.display = ok ? "" : "none";
+    if (ok) { shown++; if (firstVisible < 0) firstVisible = i; }
+  });
+  empty.hidden = shown !== 0;
+  if (shown === 0) { empty.textContent = "No commands match your filter."; }
+  // Keep a valid selection: if the selected row got filtered out (or none was
+  // selected), jump to the newest visible one so the detail pane stays useful.
+  if (selected < 0 || nodes[selected].tr.style.display === "none") {
+    select(firstVisible);
   }
-  // Hide day headers whose entries are all filtered out.
-  for (const h of list.querySelectorAll(".day")) {
-    let sib = h.nextElementSibling, any = false;
-    while (sib && !sib.classList.contains("day")) {
-      if (sib.classList.contains("entry") && !sib.classList.contains("hidden")) { any = true; break; }
-      sib = sib.nextElementSibling;
-    }
-    h.style.display = any ? "" : "none";
-  }
-  let es = document.querySelector(".empty-state");
-  if (shown === 0) {
-    if (!es) { es = document.createElement("div"); es.className = "empty-state"; list.appendChild(es); }
-    es.textContent = entries.length ? "No commands match your filter." : "No commands have been logged yet.";
-  } else if (es) { es.remove(); }
 }
 search.addEventListener("input", apply);
 failonly.addEventListener("change", apply);

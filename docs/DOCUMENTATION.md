@@ -1039,12 +1039,14 @@ seed status
 Renders every logged `seed` command (the daily plain-text files under
 `~/seedling/system/logs/`) into a single **self-contained HTML page** and
 opens it in your browser. The page is offline — no CDN, no network — so it
-works on a closed network like everything else in seedling. It has a search
-box (matches command *and* output), a **failures-only** toggle, an
-**interactive date-range picker** (All / Today / 7 days / 30 days presets,
-plus custom From/To date fields), and collapsible per-command output;
-commands that exited non-zero are expanded by default so problems stand out.
-Success/failure is colour-coded from each command's recorded exit code.
+works on a closed network like everything else in seedling. It's a
+**master-detail** view: a dense table on the left (**Date · Time · Status ·
+Command · Duration**), and clicking a row shows that command's full output in
+the pane on the right. Status is colour-coded from each command's recorded
+exit code, and duration is computed from the start/finish timestamps. Above
+the table are a search box (matches command *and* output), a **failures-only**
+toggle, and an **interactive date-range picker** (All / Today / 7 days /
+30 days presets, plus custom From/To date fields).
 
 All embedded commands are filtered client-side, so changing the date range
 is instant and needs no regeneration. `--days` still controls how much
