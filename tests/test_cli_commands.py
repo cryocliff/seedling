@@ -13,11 +13,11 @@ from seedling import config, paths
 from seedling.commands import python_cmd
 
 ALL_COMMANDS = [
-    "python", "python-list", "python-remove",
-    "venv", "venv-list", "venv-remove", "venv-remove-all", "venv-default",
+    "python", "python-list", "remove-python",
+    "venv", "venv-list", "remove-venv", "remove-venv-all", "venv-default",
     "activate", "deactivate", "install", "uninstall", "package-list",
     "repo-clone", "repo-list", "repo-cd", "repo-vscode", "repo-open",
-    "repo-install", "repo-remove",
+    "repo-install", "remove-repo",
     "vscode", "summary", "status", "config", "where",
     "kill-processes", "update-commands", "remove-user", "purge",
 ]
@@ -26,8 +26,8 @@ ALL_COMMANDS = [
 _NON_DISPATCH = {"where", "help"}
 
 ADMIN_COMMANDS = [
-    "admin-purge-all-users", "admin-remove-user", "admin-venv-remove",
-    "admin-venv-remove-all", "admin-python-remove", "admin-repo-remove",
+    "admin-purge-all-users", "admin-remove-user", "admin-remove-venv",
+    "admin-remove-venv-all", "admin-remove-python", "admin-remove-repo",
 ]
 
 
@@ -46,7 +46,7 @@ def test_every_command_is_dispatchable(home):
 def test_bare_seed_shows_grouped_help(run_cli):
     code, out = run_cli()
     assert code == 0
-    for family_member in ("python-list", "venv-remove-all", "repo-clone",
+    for family_member in ("python-list", "remove-venv-all", "repo-clone",
                           "repo-vscode", "venv-default", "package-list"):
         assert family_member in out
 

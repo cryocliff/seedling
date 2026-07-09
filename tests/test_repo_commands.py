@@ -111,6 +111,6 @@ class TestGitFileProtocol:
         code, out = run_cli("repo-clone", str(upstream))
         assert code == 1 and "already exists" in out
 
-        code, out = run_cli("repo-remove", "upstream-project", "-y")
+        code, out = run_cli("remove-repo", "upstream-project", "-y")
         assert code == 0
         assert not cloned.exists()

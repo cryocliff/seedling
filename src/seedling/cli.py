@@ -66,10 +66,10 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("where", "", "Print the seedling home directory"),
     ]),
     ("Danger zone -- these delete things (all support --preview)", [
-        ("repo-remove", "<name>", "Delete a cloned repo"),
-        ("venv-remove", "<name>", "Delete a single venv"),
-        ("venv-remove-all", "", "Delete every venv"),
-        ("python-remove", "<tag>", "Delete a base Python and its venvs"),
+        ("remove-repo", "<name>", "Delete a cloned repo"),
+        ("remove-venv", "<name>", "Delete a single venv"),
+        ("remove-venv-all", "", "Delete every venv"),
+        ("remove-python", "<tag>", "Delete a base Python and its venvs"),
         ("remove-user", "", "Delete everything seedling manages"),
         ("purge", "", "Full uninstall (also removes the shell hook)"),
     ]),
@@ -82,10 +82,10 @@ _ADMIN_HELP_GROUP: tuple[str, list[tuple[str, str, str]]] = (
     "Admin (elevated; shared-root installs) -- run as Administrator/root", [
         ("admin-purge-all-users", "", "Remove EVERY user's install under the shared root"),
         ("admin-remove-user", "<user>", "Remove one user's entire install"),
-        ("admin-venv-remove", "<user> <name>", "Remove one user's venv"),
-        ("admin-venv-remove-all", "<user>", "Remove all of one user's venvs"),
-        ("admin-python-remove", "<user> <tag>", "Remove one user's base Python + its venvs"),
-        ("admin-repo-remove", "<user> <name>", "Remove one user's cloned repo"),
+        ("admin-remove-venv", "<user> <name>", "Remove one user's venv"),
+        ("admin-remove-venv-all", "<user>", "Remove all of one user's venvs"),
+        ("admin-remove-python", "<user> <tag>", "Remove one user's base Python + its venvs"),
+        ("admin-remove-repo", "<user> <name>", "Remove one user's cloned repo"),
     ],
 )
 
@@ -149,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
                                 "the newest stable version")
 
     p_remove_python = sub.add_parser(
-        "python-remove", parents=[danger],
+        "remove-python", parents=[danger],
         help="Remove a base Python and any venvs built from it")
     p_remove_python.add_argument("tag", nargs="?", help="e.g. 312")
 
@@ -214,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cd_repo.add_argument("--print-path", dest="print_path", action="store_true",
                             help=argparse.SUPPRESS)  # used internally by the shell wrapper
 
-    p_remove_repo = sub.add_parser("repo-remove", parents=[danger],
+    p_remove_repo = sub.add_parser("remove-repo", parents=[danger],
                                    help="Delete a cloned repo")
     p_remove_repo.add_argument("name", nargs="?", help="Name of the repo to delete")
 
@@ -233,10 +233,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_remove = sub.add_parser("remove-user", parents=[danger],
                               help="Delete everything seedling manages")
 
-    sub.add_parser("venv-remove-all", parents=[danger],
+    sub.add_parser("remove-venv-all", parents=[danger],
                    help="Delete every venv seedling has created")
 
-    p_remove_venv = sub.add_parser("venv-remove", parents=[danger],
+    p_remove_venv = sub.add_parser("remove-venv", parents=[danger],
                                    help="Delete a single venv")
     p_remove_venv.add_argument("name", nargs="?", help="Name of the venv to delete")
 
@@ -290,21 +290,21 @@ def build_parser() -> argparse.ArgumentParser:
                             help="[admin] Remove one user's entire seedling install")
     p_aru.add_argument("user", nargs="?", help="Username whose install to remove")
 
-    p_avr = sub.add_parser("admin-venv-remove", parents=[danger],
+    p_avr = sub.add_parser("admin-remove-venv", parents=[danger],
                             help="[admin] Remove one user's venv")
     p_avr.add_argument("user", nargs="?")
     p_avr.add_argument("name", nargs="?")
 
-    p_avra = sub.add_parser("admin-venv-remove-all", parents=[danger],
+    p_avra = sub.add_parser("admin-remove-venv-all", parents=[danger],
                              help="[admin] Remove all of one user's venvs")
     p_avra.add_argument("user", nargs="?")
 
-    p_apr = sub.add_parser("admin-python-remove", parents=[danger],
+    p_apr = sub.add_parser("admin-remove-python", parents=[danger],
                             help="[admin] Remove one user's base Python + its venvs")
     p_apr.add_argument("user", nargs="?")
     p_apr.add_argument("tag", nargs="?")
 
-    p_arr = sub.add_parser("admin-repo-remove", parents=[danger],
+    p_arr = sub.add_parser("admin-remove-repo", parents=[danger],
                             help="[admin] Remove one user's cloned repo")
     p_arr.add_argument("user", nargs="?")
     p_arr.add_argument("name", nargs="?")
@@ -354,7 +354,7 @@ def _dispatch_main(argv: list[str]) -> int:
 
     dispatch = {
         "python": python_cmd.run,
-        "python-remove": python_remove_cmd.run,
+        "remove-python": python_remove_cmd.run,
         "venv": venv_cmd.run,
         "venv-list": list_cmd.list_venvs,
         "python-list": list_cmd.list_python,
@@ -368,13 +368,13 @@ def _dispatch_main(argv: list[str]) -> int:
         "repo-clone": repo_cmd.clone,
         "repo-list": repo_cmd.list_repos,
         "repo-cd": repo_cmd.cd_repo,
-        "repo-remove": repo_cmd.remove,
+        "remove-repo": repo_cmd.remove,
         "repo-open": repo_cmd.open_repo,
         "repo-vscode": repo_cmd.vscode_repo,
         "repo-install": repo_cmd.install_repo,
         "remove-user": remove_cmd.run,
-        "venv-remove-all": venv_remove_cmd.run_all,
-        "venv-remove": venv_remove_cmd.run_one,
+        "remove-venv-all": venv_remove_cmd.run_all,
+        "remove-venv": venv_remove_cmd.run_one,
         "purge": purge_cmd.run,
         "kill-processes": kill_cmd.run,
         "update-commands": update_cmd.run,
@@ -383,10 +383,10 @@ def _dispatch_main(argv: list[str]) -> int:
         "config": config_cmd.run,
         "admin-purge-all-users": admin_cmd.purge_all_users,
         "admin-remove-user": admin_cmd.remove_user,
-        "admin-venv-remove": admin_cmd.venv_remove,
-        "admin-venv-remove-all": admin_cmd.venv_remove_all,
-        "admin-python-remove": admin_cmd.python_remove,
-        "admin-repo-remove": admin_cmd.repo_remove,
+        "admin-remove-venv": admin_cmd.venv_remove,
+        "admin-remove-venv-all": admin_cmd.venv_remove_all,
+        "admin-remove-python": admin_cmd.python_remove,
+        "admin-remove-repo": admin_cmd.repo_remove,
     }
 
     if args.command == "where":

@@ -87,7 +87,7 @@ def test_help_admin_reveals_family(shared_install, capsys):
     _run("help", "--admin")
     out = capsys.readouterr().out
     for cmd in ("admin-purge-all-users", "admin-remove-user",
-                "admin-venv-remove", "admin-python-remove", "admin-repo-remove"):
+                "admin-remove-venv", "admin-remove-python", "admin-remove-repo"):
         assert cmd in out
 
 
@@ -111,7 +111,7 @@ def test_remove_user_unknown(shared_install, monkeypatch, capsys):
 def test_venv_remove_one_user(shared_install, monkeypatch):
     root, users, calls = shared_install
     monkeypatch.setattr(admin, "is_elevated", lambda: True)
-    _run("admin-venv-remove", "bob", "dev", "-y")
+    _run("admin-remove-venv", "bob", "dev", "-y")
     assert not (users["bob"] / "python/venvs/dev").exists()
     assert users["bob"].exists()  # rest of bob's install intact
     assert (users["alice"] / "python/venvs/dev").exists()  # alice untouched
@@ -120,7 +120,7 @@ def test_venv_remove_one_user(shared_install, monkeypatch):
 def test_repo_remove_one_user(shared_install, monkeypatch):
     root, users, calls = shared_install
     monkeypatch.setattr(admin, "is_elevated", lambda: True)
-    _run("admin-repo-remove", "carol", "proj", "-y")
+    _run("admin-remove-repo", "carol", "proj", "-y")
     assert not (users["carol"] / "repo/proj").exists()
     assert (users["bob"] / "repo/proj").exists()
 
@@ -135,7 +135,7 @@ def test_python_remove_takes_dependent_venvs(shared_install, monkeypatch):
         '{"target": "cpython-3.12.5"}')
     (alice / "python/venvs/dev/pyvenv.cfg").write_text(
         f"home = {base.resolve()}\n")
-    _run("admin-python-remove", "alice", "312", "-y")
+    _run("admin-remove-python", "alice", "312", "-y")
     assert not base.exists()
     assert not (alice / "python/base/312.alias.json").exists()
     assert not (alice / "python/venvs/dev").exists()  # dependent venv gone

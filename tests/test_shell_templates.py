@@ -64,14 +64,14 @@ class TestBashFunction:
         venv = home / "python" / "venvs" / "dev"
         venv.mkdir(parents=True)
         _stub_cli(home, textwrap.dedent(f"""\
-            [ "$1" = "venv-remove" ] && rm -rf "{venv.as_posix()}"
+            [ "$1" = "remove-venv" ] && rm -rf "{venv.as_posix()}"
             exit 0
         """))
         rendered = _render_sh(tmp_path, home)
         result = run_bash(
             f"VIRTUAL_ENV='{venv.as_posix()}'; "
             f"deactivate() {{ unset VIRTUAL_ENV; unset -f deactivate; }}; "
-            f". '{rendered}'; seed venv-remove dev; "
+            f". '{rendered}'; seed remove-venv dev; "
             f"echo \"after=${{VIRTUAL_ENV:-unset}}\"")
         assert "deactivated: the venv this shell had active" in result.stdout
         assert "after=unset" in result.stdout

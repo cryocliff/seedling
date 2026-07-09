@@ -80,7 +80,7 @@ def run_all(args) -> int:
 
 def run_one(args) -> int:
     if not args.name:
-        print("Usage: seed venv-remove <name>")
+        print("Usage: seed remove-venv <name>")
         return 1
 
     target = paths.venv_dir(args.name)

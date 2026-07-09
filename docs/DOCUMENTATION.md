@@ -330,8 +330,8 @@ PowerShell function, not just a path to a binary:
   repo's path (`--print-path`), and the function `cd`s the current shell
   there.
 - **After every command**, the function checks whether the venv this shell
-  has active still exists — if a `venv-remove`/`venv-remove-all`/
-  `python-remove`/`remove-user`/`purge` just deleted it, the shell
+  has active still exists — if a `remove-venv`/`remove-venv-all`/
+  `remove-python`/`remove-user`/`purge` just deleted it, the shell
   deactivates it automatically (printing `(deactivated: the venv this
   shell had active no longer exists)`) instead of leaving a dangling
   prompt pointing at a folder that's gone.
@@ -350,8 +350,8 @@ shell function, since a subprocess has no way to affect your shell.
 
 ## Why deletion is so defensive
 
-Every command that deletes a directory (`venv-remove(-all)`, `python-remove`,
-`repo-remove`, `remove-user`, `purge`) routes through a shared helper
+Every command that deletes a directory (`remove-venv(-all)`, `remove-python`,
+`remove-repo`, `remove-user`, `purge`) routes through a shared helper
 (`robust_rmtree`) that works around four real causes of "file in use" /
 permission-denied failures, rather than just calling
 `shutil.rmtree(path, ignore_errors=True)` and hoping:
@@ -433,8 +433,8 @@ a given call (the shell integration uses this itself for its startup
 
 ## Non-interactive mode & previews
 
-Every destructive command (`python-remove`, `venv-remove`, `venv-remove-all`,
-`repo-remove`, `remove-user`, `purge`, `kill-processes`) supports three
+Every destructive command (`remove-python`, `remove-venv`, `remove-venv-all`,
+`remove-repo`, `remove-user`, `purge`, `kill-processes`) supports three
 shared flags:
 
 - `-y` / `--yes` — skip the confirmation prompt and proceed.
@@ -465,14 +465,17 @@ installed by uv's own tooling, which does its own verification.
 
 ## Command reference
 
-Command names follow one rule: **a bare noun is the primary action, and
-`noun-verb` is management of that thing**:
+Command names follow two rules: **a bare noun is the primary action and
+`noun-verb` is management of that thing** (`python` installs, `python-list`
+lists) — except **everything that deletes is a `remove-*` command**, so every
+destructive action reads the same way (`remove-venv`, `remove-python`,
+`remove-repo`, `remove-user`) and they group together in help's Danger Zone:
 
 | Family | Commands |
 |---|---|
-| Python | `python [ver]` *(install)*, `python-list`, `python-remove` |
-| Venvs | `venv <name>` *(create)*, `venv-list`, `venv-remove`, `venv-remove-all`, `venv-default` |
-| Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `repo-remove` |
+| Python | `python [ver]` *(install)*, `python-list`, `remove-python` |
+| Venvs | `venv <name>` *(create)*, `venv-list`, `remove-venv`, `remove-venv-all`, `venv-default` |
+| Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
 | Packages | `install`, `uninstall`, `package-list` |
 | Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
 
@@ -513,7 +516,7 @@ Base Python interpreters in ~/seedling/python/base:
   312      -> cpython-3.12.4-linux-x86_64-gnu  (default for `seed venv`)
 ```
 
-### `seed python-remove <tag> [-y]`
+### `seed remove-python <tag> [-y]`
 
 Deletes a base Python **and every venv that was built from it** — venvs
 can't function without the interpreter they were created against, so this
@@ -531,7 +534,7 @@ cascades rather than leaving them broken.
   left).
 
 ```
-seed python-remove 311
+seed remove-python 311
 ```
 
 ### `seed venv <name> [--python <tag>] [--no-default-packages]`
@@ -659,7 +662,7 @@ requests           2.34.2
 urllib3            2.7.0
 ```
 
-### `seed venv-remove <name> [-y]`
+### `seed remove-venv <name> [-y]`
 
 Deletes a single venv from `~/seedling/python/venvs`. Force-closes
 Python/VS Code processes first (see `seed kill-processes`) so a running
@@ -676,18 +679,18 @@ Deletion itself uses a retrying, defensive helper shared by every
 for the bug this fixes and how.
 
 ```
-seed venv-remove myproject
-seed venv-remove myproject -y
+seed remove-venv myproject
+seed remove-venv myproject -y
 ```
 
-### `seed venv-remove-all [-y]`
+### `seed remove-venv-all [-y]`
 
 Deletes **every** venv under `~/seedling/python/venvs`, with the same
-process-closing behavior as `seed venv-remove`. Lists them all before
+process-closing behavior as `seed remove-venv`. Lists them all before
 asking for confirmation (skippable with `-y`).
 
 ```
-seed venv-remove-all
+seed remove-venv-all
 ```
 
 ### `seed vscode [path] [--reinstall] [--no-open]`
@@ -765,7 +768,7 @@ There, if git isn't found, you'll get a clear one-line instruction
 manager on Linux) instead of a silent failure.
 
 Fails with a clear message (rather than overwriting) if a repo with that
-name already exists — remove it first with `seed repo-remove`.
+name already exists — remove it first with `seed remove-repo`.
 
 ```
 seed repo-clone https://github.com/you/some-project.git
@@ -842,14 +845,14 @@ seed activate myproject
 seed repo-install some-project
 ```
 
-### `seed repo-remove <name> [-y]`
+### `seed remove-repo <name> [-y]`
 
 Deletes a cloned repo from `~/seedling/repo`. Same process-closing
-behavior as `seed venv-remove` before deletion, and the same confirmation
+behavior as `seed remove-venv` before deletion, and the same confirmation
 prompt (skippable with `-y`).
 
 ```
-seed repo-remove some-project
+seed remove-repo some-project
 ```
 
 ### `seed kill-processes <all|name> [-y]`
@@ -876,7 +879,7 @@ Implementation notes:
   because on macOS/Linux, `seed-cli`'s own process image is literally a
   `python3.x` process (its shebang execs the interpreter directly).
 - The underlying `kill_python_and_vscode()` helper is reused by
-  `seed venv-remove(-all)`, `seed python-remove`, `seed repo-remove`,
+  `seed remove-venv(-all)`, `seed remove-python`, `seed remove-repo`,
   `seed remove-user`, and `seed purge` — anything that deletes files is
   preceded by this same sweep, to avoid "file in use" failures.
 
@@ -967,8 +970,8 @@ otherwise just accumulate in your home directory forever.
 
 The interactive confirmation screen also points out the alternatives
 before you commit: how to preserve repos (`--keep-repos`), the smaller
-partial-removal commands (`venv-remove`, `venv-remove-all`, `python-remove`,
-`repo-remove`, and `remove-user`, which keeps the shell hook), and the
+partial-removal commands (`remove-venv`, `remove-venv-all`, `remove-python`,
+`remove-repo`, and `remove-user`, which keeps the shell hook), and the
 reinstall instructions matched to how this copy was installed: the
 public one-liners for a github.com install, "run the installer on the
 share again" for a network-drive install, or "clone this URL" for a
@@ -1109,10 +1112,10 @@ Every one of them:
 |---|---|
 | `admin-purge-all-users` | every user's install under the shared root, plus every user's shell hook |
 | `admin-remove-user <user>` | one user's entire seedling home |
-| `admin-venv-remove <user> <name>` | one user's single venv |
-| `admin-venv-remove-all <user>` | all of one user's venvs |
-| `admin-python-remove <user> <tag>` | one user's base Python and the venvs built on it |
-| `admin-repo-remove <user> <name>` | one user's cloned repo |
+| `admin-remove-venv <user> <name>` | one user's single venv |
+| `admin-remove-venv-all <user>` | all of one user's venvs |
+| `admin-remove-python <user> <tag>` | one user's base Python and the venvs built on it |
+| `admin-remove-repo <user> <name>` | one user's cloned repo |
 
 Example -- an administrator decommissioning a shared lab machine whose users
 live under `C:\seedling\<name>`:

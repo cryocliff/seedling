@@ -111,7 +111,7 @@ def remove_user(args) -> int:
 # --- granular per-user removes ---------------------------------------------
 
 def venv_remove(args) -> int:
-    """admin-venv-remove <user> <name>"""
+    """admin-remove-venv <user> <name>"""
     home = _user_home_or_none(args)
     if home is None:
         return 1
@@ -124,7 +124,7 @@ def venv_remove(args) -> int:
 
 
 def venv_remove_all(args) -> int:
-    """admin-venv-remove-all <user>"""
+    """admin-remove-venv-all <user>"""
     home = _user_home_or_none(args)
     if home is None:
         return 1
@@ -138,7 +138,7 @@ def venv_remove_all(args) -> int:
 
 
 def python_remove(args) -> int:
-    """admin-python-remove <user> <tag> -- base Python + venvs built on it."""
+    """admin-remove-python <user> <tag> -- base Python + venvs built on it."""
     home = _user_home_or_none(args)
     if home is None:
         return 1
@@ -162,7 +162,7 @@ def python_remove(args) -> int:
 
 
 def repo_remove(args) -> int:
-    """admin-repo-remove <user> <name>"""
+    """admin-remove-repo <user> <name>"""
     home = _user_home_or_none(args)
     if home is None:
         return 1

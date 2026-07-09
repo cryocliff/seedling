@@ -37,7 +37,7 @@ def clone(args) -> int:
     target = paths.repo_dir(name)
     if target.exists():
         print(f"'{name}' already exists at {target}.")
-        print(f"Run `seed repo-remove {name}` first if you want to re-clone it.")
+        print(f"Run `seed remove-repo {name}` first if you want to re-clone it.")
         return 1
 
     paths.REPO_DIR.mkdir(parents=True, exist_ok=True)
@@ -83,7 +83,7 @@ def list_repos(args) -> int:
 def remove(args) -> int:
     name = getattr(args, "name", None)
     if not name:
-        print("Usage: seed repo-remove <name>")
+        print("Usage: seed remove-repo <name>")
         return 1
 
     target = paths.repo_dir(name)

@@ -35,7 +35,7 @@ def _venvs_using_base(base_dir) -> list:
 def run(args) -> int:
     tag = getattr(args, "tag", None)
     if not tag:
-        print("Usage: seed python-remove <tag>")
+        print("Usage: seed remove-python <tag>")
         return 1
 
     base_dir = python_cmd.resolve_base(tag)

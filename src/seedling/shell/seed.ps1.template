@@ -15,7 +15,7 @@ $script:SeedlingCli = Join-Path $script:SeedlingHome "system\bin\seed-cli.exe"
 $env:SEEDLING_HOME = $script:SeedlingHome
 
 # If the venv this shell has active was just deleted (purge, remove-user,
-# venv-remove(-all), python-remove...), deactivate it instead of leaving a
+# remove-venv(-all), remove-python...), deactivate it instead of leaving a
 # dangling prompt pointing at a folder that no longer exists. Only the
 # shell itself can do this -- seed-cli is a child process.
 function script:SeedlingDeactivateIfGone {

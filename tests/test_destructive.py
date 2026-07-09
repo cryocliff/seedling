@@ -51,7 +51,7 @@ def test_preview_requested(home):
 
 def test_venv_remove_preview_deletes_nothing(run_cli, home):
     make_venv_dirs(home, "dev")
-    code, out = run_cli("venv-remove", "dev", "--preview")
+    code, out = run_cli("remove-venv", "dev", "--preview")
     assert code == 0
     assert "Preview" in out and "nothing was changed" in out
     assert (home / "python" / "venvs" / "dev").exists()
@@ -59,7 +59,7 @@ def test_venv_remove_preview_deletes_nothing(run_cli, home):
 
 def test_venv_remove_non_interactive_aborts(run_cli, home):
     make_venv_dirs(home, "dev")
-    code, out = run_cli("venv-remove", "dev", "--non-interactive")
+    code, out = run_cli("remove-venv", "dev", "--non-interactive")
     assert code == 1
     assert "Aborted" in out
     assert (home / "python" / "venvs" / "dev").exists()
@@ -67,21 +67,21 @@ def test_venv_remove_non_interactive_aborts(run_cli, home):
 
 def test_venv_remove_yes_deletes(run_cli, home):
     make_venv_dirs(home, "dev")
-    code, out = run_cli("venv-remove", "dev", "-y")
+    code, out = run_cli("remove-venv", "dev", "-y")
     assert code == 0
     assert not (home / "python" / "venvs" / "dev").exists()
 
 
 def test_venv_remove_missing(run_cli, home):
-    code, out = run_cli("venv-remove", "ghost", "-y")
+    code, out = run_cli("remove-venv", "ghost", "-y")
     assert code == 1 and "No venv named" in out
 
 
 def test_venv_remove_all(run_cli, home):
     make_venv_dirs(home, "a", "b", "c")
-    code, out = run_cli("venv-remove-all", "--preview")
+    code, out = run_cli("remove-venv-all", "--preview")
     assert "3 venv(s)" in out
-    code, out = run_cli("venv-remove-all", "-y")
+    code, out = run_cli("remove-venv-all", "-y")
     assert code == 0 and "Deleted 3 venv(s)" in out
     assert not any((home / "python" / "venvs").iterdir())
 
@@ -96,10 +96,10 @@ def test_python_remove_takes_dependent_venvs(run_cli, home):
     make_venv_dirs(home, "unrelated")  # points nowhere near this base
     config.set_default_base("312")
 
-    code, out = run_cli("python-remove", "312", "--preview")
+    code, out = run_cli("remove-python", "312", "--preview")
     assert code == 0 and "dev" in out and "unrelated" not in out
 
-    code, out = run_cli("python-remove", "312", "-y")
+    code, out = run_cli("remove-python", "312", "-y")
     assert code == 0
     assert not base.exists()
     assert not (home / "python" / "base" / "312.alias.json").exists()
@@ -126,7 +126,7 @@ def test_purge_confirmation_screen_lists_guidance(run_cli, home, answer):
     code, out = run_cli("purge")
     assert code == 1  # aborted
     assert "smaller hammers" in out
-    assert "seed venv-remove <name>" in out
+    assert "seed remove-venv <name>" in out
     assert "--keep-repos" in out
     assert "To reinstall seedling later" in out
     assert home.exists()
