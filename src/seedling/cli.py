@@ -14,6 +14,7 @@ from .commands import (
     install_cmd,
     kill_cmd,
     list_cmd,
+    logs_viewer_cmd,
     purge_cmd,
     python_cmd,
     python_remove_cmd,
@@ -60,6 +61,7 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Utilities", [
         ("summary", "[--sizes]", "Show everything seedling has installed"),
         ("status", "", "Health-check the whole seedling install"),
+        ("logs-viewer", "[--days N]", "Open the command logs in a browser"),
         ("config", "[get|set|unset]", "View or change seedling settings"),
         ("kill-processes", "<all|name>", "Force-close python/VS Code (or named) processes"),
         ("update-commands", "", "Update the seed CLI itself"),
@@ -264,6 +266,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status", help="Health-check the whole seedling install")
 
+    p_logs = sub.add_parser(
+        "logs-viewer",
+        help="Render the command logs as an HTML page and open it in a browser")
+    p_logs.add_argument("--days", type=int, default=None,
+                         help="Only include the last N days of logs (default: all)")
+    p_logs.add_argument("--no-open", dest="no_open", action="store_true",
+                         help="Write the HTML file without opening a browser")
+
     p_config = sub.add_parser("config", help="View or change seedling settings")
     config_sub = p_config.add_subparsers(dest="action")
     p_cfg_get = config_sub.add_parser("get", help="Print one setting's value")
@@ -380,6 +390,7 @@ def _dispatch_main(argv: list[str]) -> int:
         "update-commands": update_cmd.run,
         "summary": summary_cmd.run,
         "status": status_cmd.run,
+        "logs-viewer": logs_viewer_cmd.run,
         "config": config_cmd.run,
         "admin-purge-all-users": admin_cmd.purge_all_users,
         "admin-remove-user": admin_cmd.remove_user,

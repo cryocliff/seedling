@@ -477,7 +477,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | Venvs | `venv <name>` *(create)*, `venv-list`, `remove-venv`, `remove-venv-all`, `venv-default` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
 | Packages | `install`, `uninstall`, `package-list` |
-| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
 
 ### `seed python [version]`
 
@@ -1032,6 +1032,54 @@ installed yet, no git, etc.) and doesn't affect the exit code.
 
 ```
 seed status
+```
+
+### `seed logs-viewer [--days N] [--no-open]`
+
+Renders every logged `seed` command (the daily plain-text files under
+`~/seedling/system/logs/`) into a single **self-contained HTML page** and
+opens it in your browser. The page is offline — no CDN, no network — so it
+works on a closed network like everything else in seedling. It has a search
+box (matches command *and* output), a **failures-only** toggle, an
+**interactive date-range picker** (All / Today / 7 days / 30 days presets,
+plus custom From/To date fields), and collapsible per-command output;
+commands that exited non-zero are expanded by default so problems stand out.
+Success/failure is colour-coded from each command's recorded exit code.
+
+All embedded commands are filtered client-side, so changing the date range
+is instant and needs no regeneration. `--days` still controls how much
+history gets embedded in the first place (the picker can only reach within
+what's loaded).
+
+**The bootstrap installer is captured too**, into
+`system/logs/install-<timestamp>.log`, shown in the viewer tagged **`setup`**
+alongside your `seed` commands — so a failed or surprising install is there
+to inspect after the fact.
+
+- **macOS/Linux (`install.sh`)** tees its *entire* run — every step and the
+  output of the tools it invokes (uv, git, seed-cli) — into the log, in the
+  same block format as the daily logs (with a real exit code).
+- **Windows (`install.ps1`)** records the console via `Start-Transcript`,
+  which captures seedling's own `==>` narrative and the uv bootstrap, but
+  **not** the raw output of native tools like `uv.exe`/`git` — on Windows
+  PowerShell 5.1, redirecting a native command's stderr under
+  `$ErrorActionPreference='Stop'` turns uv's normal progress into a fatal
+  error, so the installer deliberately doesn't do that. The individual
+  `seed python` / `seed venv` / `seed vscode` setup steps still appear as
+  their own entries (they log themselves). (The transcript is UTF-16; the
+  viewer detects that automatically.)
+
+The page is written to `~/seedling/system/logs/logs-viewer.html` and
+regenerated on every run.
+
+- `--days N` — only include the last N days of logs (default: all, up to the
+  30-day retention window runlog keeps).
+- `--no-open` — write the HTML file but don't launch a browser (prints the
+  path; useful over SSH / on a headless box).
+
+```
+seed logs-viewer
+seed logs-viewer --days 7
 ```
 
 ### `seed config [get <key> | set <key> <value> | unset <key>]`

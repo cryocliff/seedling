@@ -65,7 +65,10 @@ def _check_config() -> None:
         _ok("config not written yet (defaults in effect)")
         return
     try:
-        json.loads(paths.CONFIG_FILE.read_text())
+        # utf-8-sig so a BOM-prefixed settings.json (install.ps1 seeds it via
+        # PowerShell's `Set-Content -Encoding UTF8`) reads as OK, matching how
+        # config.load() reads it -- otherwise status falsely flags it corrupt.
+        json.loads(paths.CONFIG_FILE.read_text(encoding="utf-8-sig"))
         _ok(f"config parses ({paths.CONFIG_FILE})")
     except (json.JSONDecodeError, OSError) as e:
         _fail(f"config file is unreadable/corrupt: {e} -- fix or delete {paths.CONFIG_FILE}")

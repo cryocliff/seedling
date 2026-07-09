@@ -82,7 +82,12 @@ def load() -> dict[str, Any]:
     if not paths.CONFIG_FILE.exists():
         return dict(_DEFAULTS)
     try:
-        data = json.loads(paths.CONFIG_FILE.read_text())
+        # utf-8-sig, not utf-8: install.ps1 seeds settings.json via PowerShell
+        # 5.1's `Set-Content -Encoding UTF8`, which writes a UTF-8 BOM. Reading
+        # that as plain utf-8 leaves a leading BOM that makes json.loads fail
+        # ("Expecting value: line 1 column 1"), silently discarding every
+        # conf-seeded setting. utf-8-sig strips a BOM and is a no-op without one.
+        data = json.loads(paths.CONFIG_FILE.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError):
         data = {}
     merged = dict(_DEFAULTS)
@@ -92,7 +97,8 @@ def load() -> dict[str, Any]:
 
 def save(data: dict[str, Any]) -> None:
     paths.ensure_layout()
-    paths.CONFIG_FILE.write_text(json.dumps(data, indent=2, sort_keys=True))
+    paths.CONFIG_FILE.write_text(
+        json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def get(key: str) -> Any:
@@ -124,7 +130,8 @@ def is_multi_user() -> bool:
     try:
         if not paths.CONFIG_FILE.exists():
             return False
-        return bool(json.loads(paths.CONFIG_FILE.read_text()).get("shared_root"))
+        return bool(json.loads(
+            paths.CONFIG_FILE.read_text(encoding="utf-8-sig")).get("shared_root"))
     except (json.JSONDecodeError, OSError):
         return False
 

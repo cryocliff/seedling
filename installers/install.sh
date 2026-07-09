@@ -100,6 +100,22 @@ case "$SEEDLING_HOME" in
         ;;
 esac
 
+# ---------------------------------------------------------------------------
+# 1b. Capture this whole install into the seedling logs, so `seed logs-viewer`
+#     shows the bootstrap alongside your `seed` commands. Everything from here
+#     down is tee'd (ANSI-stripped, like the daily logs) into a per-install
+#     log and still shown live. Best-effort: a logs dir we can't create just
+#     means this install runs without a log.
+# ---------------------------------------------------------------------------
+SEED_INSTALL_LOG=""
+if mkdir -p "$SEEDLING_HOME/system/logs" 2>/dev/null; then
+    SEED_INSTALL_LOG="$SEEDLING_HOME/system/logs/install-$(date +%Y%m%d-%H%M%S).log"
+    printf '=== [%s] installer (bootstrap)\n' "$(date '+%Y-%m-%d %H:%M:%S')" > "$SEED_INSTALL_LOG"
+fi
+_seed_rc_file="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/seed-rc.$$")"
+{
+trap 'printf %s "$?" > "$_seed_rc_file" 2>/dev/null' EXIT
+
 INSTALLED_FROM_DIR=""
 CLONE_MODE=0
 if [ -f "$REPO_ROOT/src/pyproject.toml" ]; then
@@ -525,3 +541,14 @@ echo
 echo "Note: seed-cli was installed from a private copy at $SEEDLING_HOME/system/src."
 echo "Nothing updates it automatically -- run 'seed update-commands' whenever"
 echo "you want to pull in changes."
+} 2>&1 | sed "s/$(printf '\033')\[[0-9;]*[A-Za-z]//g" | { if [ -n "$SEED_INSTALL_LOG" ]; then tee -a "$SEED_INSTALL_LOG"; else cat; fi; }
+
+# Close the install-capture block opened in step 1b: record the exit code in
+# the log (block format, so `seed logs-viewer` parses it like a `seed`
+# command) and exit with the installer's real status.
+_seed_rc="$(cat "$_seed_rc_file" 2>/dev/null || echo 0)"
+rm -f "$_seed_rc_file" 2>/dev/null || true
+if [ -n "$SEED_INSTALL_LOG" ]; then
+    printf '=== [%s] exit code %s\n' "$(date '+%H:%M:%S')" "$_seed_rc" >> "$SEED_INSTALL_LOG"
+fi
+exit "${_seed_rc:-0}"

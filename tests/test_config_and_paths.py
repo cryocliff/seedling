@@ -18,6 +18,19 @@ def test_defaults_when_no_settings_file(home):
     assert data["ca_cert"] is None
 
 
+def test_load_tolerates_utf8_bom_from_powershell_installer(home):
+    # install.ps1 seeds settings.json via `Set-Content -Encoding UTF8`, which
+    # on WinPowerShell 5.1 writes a UTF-8 BOM. Reading it must still work --
+    # otherwise every conf-seeded setting is silently dropped on Windows.
+    paths.ensure_layout()
+    payload = {"update_source": "https://example.com/seedling.git",
+               "shared_root": r"C:\seedling"}
+    paths.CONFIG_FILE.write_text(json.dumps(payload), encoding="utf-8-sig")  # BOM
+    assert paths.CONFIG_FILE.read_bytes()[:3] == b"\xef\xbb\xbf"  # sanity: BOM present
+    assert config.get("update_source") == "https://example.com/seedling.git"
+    assert config.is_multi_user() is True
+
+
 def test_every_known_key_has_a_default(home):
     for key in config.KNOWN_KEYS:
         assert key in config._DEFAULTS, f"KNOWN_KEYS entry {key!r} missing a default"

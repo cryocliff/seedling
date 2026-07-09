@@ -152,7 +152,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | Venvs | `venv <name>` *(create)*, `venv-list`, `remove-venv`, `remove-venv-all`, `venv-default` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
 | Packages | `install`, `uninstall`, `package-list` |
-| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
 
 | Command | What it does |
 |---|---|
@@ -182,6 +182,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | `seed update-commands` | Explicitly updates the `seed` CLI itself. See below — nothing else ever does this automatically. |
 | `seed summary [--sizes]` | One screen showing everything seedling has installed: tooling, base Pythons, venvs, repos, VS Code, and settings. `--sizes` adds disk usage. |
 | `seed status` | Health check: verifies uv, git, config, every base Python and venv, the defaults, and the shell hook. Exit code 1 if anything is actually broken. |
+| `seed logs-viewer [--days N]` | Renders the command logs into a self-contained, offline HTML page and opens it in your browser — with search, a failures-only filter, an interactive date-range picker, and collapsible per-command output. `--no-open` just writes the file. |
 | `seed config` | Views/changes seedling settings (`get`/`set`/`unset`): the default base Python, a `default_venv` auto-activated by every new shell, the `venv_default_packages` list, and `update_source` (see below). |
 | `seed remove-user [-y]` | Deletes `~/seedling` entirely, after confirming. Leaves the `seed` shell hook in place. |
 | `seed purge [-y] [--keep-repos]` | **Fully uninstalls seedling** — deletes `~/seedling` entirely *and* removes the `seed` shell hook from your profile. After this, `seed` stops existing as a command. `--keep-repos` preserves `~/seedling/repo` in a sibling folder first; without it, that folder *and* any leftover backup from a previous `--keep-repos` purge are both deleted. |

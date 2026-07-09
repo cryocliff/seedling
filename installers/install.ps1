@@ -93,6 +93,20 @@ if ($SeedlingHome -like "*{user}*") {
     $SeedlingSharedRoot = Split-Path -Parent $SeedlingHome
 }
 
+# Capture this whole install into the seedling logs, so `seed logs-viewer`
+# shows the bootstrap alongside your `seed` commands. Start-Transcript records
+# the console live WITHOUT redirecting any streams -- which matters because uv
+# writes its normal progress to stderr, and redirecting a native command's
+# stderr under $ErrorActionPreference='Stop' turns it into a fatal
+# NativeCommandError (this broke the install once). Best-effort: never let
+# logging break the install; the transcript auto-finalizes when the script exits.
+try {
+    $SeedLogDir = Join-Path $SeedlingHome "system\logs"
+    New-Item -ItemType Directory -Force -Path $SeedLogDir -ErrorAction Stop | Out-Null
+    $SeedInstallLog = Join-Path $SeedLogDir ("install-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+    Start-Transcript -Path $SeedInstallLog -Force -ErrorAction Stop | Out-Null
+} catch { }
+
 $InstalledFromDir = $null
 $CloneMode = $false
 if ($HasLocalCheckout) {

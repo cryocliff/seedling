@@ -66,6 +66,19 @@ def _write_conf(copy, **overrides):
 
 
 class TestDefaultInstall:
+    def test_install_writes_a_captured_block_format_log(self, install_env):
+        copy, fake_home, home, run_install = install_env
+        result = run_install("SEEDLING_AUTO_SETUP=false")
+        assert result.returncode == 0, result.stdout + result.stderr
+        logs = list((home / "system" / "logs").glob("install-*.log"))
+        assert len(logs) == 1, "install.sh should write exactly one install log"
+        text = logs[0].read_text()
+        assert text.startswith("=== [")             # block start marker
+        assert "installer (bootstrap)" in text
+        assert "=== " in text and "exit code 0" in text   # block exit marker
+        assert "seedling is installed" in text       # captured live output
+        assert "\x1b[" not in text                    # ANSI stripped, like daily logs
+
     def test_pristine_conf_is_a_no_op_plus_recorded_origin(self, install_env):
         copy, fake_home, home, run_install = install_env
         result = run_install("SEEDLING_AUTO_SETUP=false")
