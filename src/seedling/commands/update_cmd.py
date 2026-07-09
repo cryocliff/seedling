@@ -13,7 +13,9 @@ on its own. This command updates by RE-FETCHING from the recorded source:
   - nothing recorded -> reinstall the local copy as-is, which doubles as a
                         "repair" command for hand-edited sources
 
-Either way, seed-cli is then reinstalled from the refreshed copy.
+Either way, seed-cli is then reinstalled from the refreshed copy, and the
+`seed` shell function (system/shell/seed.ps1|.sh) is re-rendered from the
+refreshed templates so shell-side changes ship with updates too.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from .. import colors, config, fsutil, paths, uv_tool, git_tool
+from .. import colors, config, fsutil, paths, shell_integration, uv_tool, git_tool
 
 
 def _swap_in(src: Path, tmp: Path) -> bool:
@@ -112,5 +114,16 @@ def run(args) -> int:
     print("Reinstalling the seed CLI ...")
     # The python package (pyproject.toml) lives in src/ within the repo tree.
     uv_tool.run(["tool", "install", "--force", "--reinstall", str(src / "src")], env=uv_tool.tool_install_env())
+
+    # The `seed` shell FUNCTION (system/shell/seed.ps1|.sh, hooked into the
+    # user's profile by the installer) is part of "the commands" too --
+    # re-render it from the refreshed templates, or template changes would
+    # only ever reach users on a full reinstall.
+    refreshed = shell_integration.refresh()
+    if refreshed:
+        print("Refreshing shell integration ...")
+        print("(takes effect in new shells; or re-source "
+              f"{refreshed[0]} in this one)")
+
     print(colors.ok("Done. Your `seed` commands are up to date."))
     return 0

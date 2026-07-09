@@ -902,6 +902,12 @@ explanation. In short:
   hand-edited something there. A failed download also falls back to this,
   never leaving you without a working `seed`.
 
+In every mode it finishes by re-rendering the `seed` shell function
+(`~/seedling/system/shell/seed.ps1` / `seed.sh`) from the refreshed
+templates, so shell-side changes ship with updates too. Your profile hook
+points at that file by path, so the refresh takes effect in new shells
+automatically — nothing in your profile is touched.
+
 ```
 seed update-commands
 ```
@@ -1151,6 +1157,8 @@ a git checkout (no `.git` folder lives inside seedling). Instead, the
 installer records where the source came from in the `update_source`
 setting, and `seed update-commands` re-fetches from there: a fresh shallow
 `git clone` for a URL, a re-copy for a directory path (see `seed config`).
+The update covers the shell side too — the rendered `seed` function in
+`~/seedling/system/shell/` is rebuilt from the refreshed templates.
 
 If no source is recorded, it just reinstalls from whatever's currently in
 `~/seedling/system/src`, so it doubles as a "repair" command if you've

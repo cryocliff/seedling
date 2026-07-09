@@ -104,6 +104,96 @@ def test_url_update_falls_back_when_clone_fails(run_cli, home, src_installed, tm
     assert calls, "reinstall should still run"
 
 
+# --- shell integration refresh ----------------------------------------------
+# update-commands must re-render system/shell/seed.{ps1,sh} from the (just
+# refreshed) templates -- template changes would otherwise only reach users
+# on a full reinstall, never on an update.
+
+def _add_templates(tree_root, marker: str):
+    shell = tree_root / "src" / "seedling" / "shell"
+    shell.mkdir(parents=True, exist_ok=True)
+    (shell / "seed.ps1.template").write_text(
+        '$script:SeedlingHome = "__SEEDLING_HOME_PLACEHOLDER__"\n'
+        f"# shell {marker}\n")
+    (shell / "seed.sh.template").write_text(
+        '__SEEDLING_HOME="__SEEDLING_HOME_PLACEHOLDER__"\n'
+        f"# shell {marker}\n")
+
+
+def test_update_refreshes_rendered_shell_files(run_cli, home, src_installed, tmp_path):
+    src, calls = src_installed
+    upstream = tmp_path / "share"
+    upstream.mkdir()
+    _make_source_tree(upstream, "v2")
+    _add_templates(upstream, "v2")
+    config.set_value("update_source", str(upstream))
+
+    # A stale render from install time, with the home the installer baked in.
+    shell_dir = home / "system" / "shell"
+    shell_dir.mkdir(parents=True, exist_ok=True)
+    (shell_dir / "seed.ps1").write_text(
+        f'$script:SeedlingHome = "{home}"\n# shell v1\n')
+
+    code, out = run_cli("update-commands")
+    assert code == 0
+    assert "Refreshing shell integration" in out
+    rendered = (shell_dir / "seed.ps1").read_text()
+    assert "# shell v2" in rendered
+    assert "__SEEDLING_HOME_PLACEHOLDER__" not in rendered
+    assert f'"{home}"' in rendered  # baked-in home survives the refresh
+
+
+def test_refresh_preserves_posix_home_in_sh_render(run_cli, home, src_installed, tmp_path):
+    """install.sh under git-bash bakes a POSIX-style home into seed.sh that
+    str(Path) would not reproduce on Windows; the refresh must keep it."""
+    src, calls = src_installed
+    upstream = tmp_path / "share"
+    upstream.mkdir()
+    _make_source_tree(upstream, "v2")
+    _add_templates(upstream, "v2")
+    config.set_value("update_source", str(upstream))
+
+    posix_home = home.as_posix()
+    shell_dir = home / "system" / "shell"
+    shell_dir.mkdir(parents=True, exist_ok=True)
+    (shell_dir / "seed.sh").write_text(
+        f'__SEEDLING_HOME="{posix_home}"\n# shell v1\n')
+
+    code, out = run_cli("update-commands")
+    assert code == 0
+    rendered = (shell_dir / "seed.sh").read_text()
+    assert "# shell v2" in rendered
+    assert f'__SEEDLING_HOME="{posix_home}"' in rendered
+
+
+def test_refresh_restores_missing_platform_file(run_cli, home, src_installed, tmp_path):
+    """No rendered file at all (e.g. deleted by hand): the current platform's
+    one is re-created from the template with this install's home."""
+    src, calls = src_installed
+    upstream = tmp_path / "share"
+    upstream.mkdir()
+    _make_source_tree(upstream, "v2")
+    _add_templates(upstream, "v2")
+    config.set_value("update_source", str(upstream))
+
+    code, out = run_cli("update-commands")
+    assert code == 0
+    import os
+    name = "seed.ps1" if os.name == "nt" else "seed.sh"
+    rendered = (home / "system" / "shell" / name).read_text()
+    assert "# shell v2" in rendered
+    assert "__SEEDLING_HOME_PLACEHOLDER__" not in rendered
+
+
+def test_update_without_templates_skips_shell_refresh(run_cli, home, src_installed):
+    """A source tree with no templates (this fixture's stub) refreshes
+    nothing and says nothing -- and must not error."""
+    src, calls = src_installed
+    code, out = run_cli("update-commands")
+    assert code == 0
+    assert "Refreshing shell integration" not in out
+
+
 # --- download.py -------------------------------------------------------------
 
 def test_sha256_and_fetch_roundtrip(home, tmp_path, capsys):

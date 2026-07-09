@@ -222,9 +222,10 @@ recording where it came from in the `update_source` setting. After that:
   ```
   This re-fetches the latest copy from the recorded `update_source` — a
   fresh shallow `git clone` for a URL, or a re-copy for a directory — swaps
-  it in, and reinstalls. If no source is recorded, it just reinstalls from
-  whatever's currently there, so it also doubles as a "repair" command if
-  you've hand-edited something.
+  it in, reinstalls, and re-renders the `seed` shell function from the
+  refreshed templates (effective in new shells). If no source is recorded,
+  it just reinstalls from whatever's currently there, so it also doubles
+  as a "repair" command if you've hand-edited something.
 
 ### Deploying inside an organization (no github.com needed)
 
