@@ -1,0 +1,18 @@
+# Deterministic line endings, independent of each contributor's
+# core.autocrlf. Without this, a Windows checkout (autocrlf=true) rewrites
+# install.sh to CRLF, which then fails under bash (`install.sh: set: Illegal
+# option -`); normalizing here keeps the repo and every checkout consistent.
+
+# Default: treat everything as text, store it as LF in the repo, and check it
+# out as LF on every platform. POSIX shell scripts, the seed.sh shell
+# integration, seedling.conf (parsed line-by-line by bash), Python, and docs
+# all require LF.
+* text=auto eol=lf
+
+# The Windows entry points are sh/batch polyglots. cmd.exe needs CRLF to read
+# them as batch, and their line-1 `:; exec sh ...installers/install.sh`
+# comment is deliberately crafted so the trailing CR falls inside the comment
+# -- so `sh ./install.cmd` on macOS/Linux still hands off cleanly (verified:
+# a CRLF install.cmd execs the LF install.sh under dash with no error). Keep
+# them CRLF on every checkout.
+*.cmd text eol=crlf
