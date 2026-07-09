@@ -1167,14 +1167,56 @@ automatically, so machines on networks without github.com stay updatable.
 
 ## Uninstalling
 
+**The normal way to uninstall is `seed purge`.** It removes the `seed`
+shell hook from your profile **and** deletes the whole install directory,
+for a full clean removal — and because it runs from inside seedling, it
+already knows its own install location (including `{user}` multi-user and
+custom `SEEDLING_HOME_DIR` layouts), handles the Windows self-deletion of
+its own running executable, and prints the right reinstall instructions
+afterward. It needs nothing but a working `seed`, and no leftover installer
+files.
+
+```
+seed purge
+```
+
+Two narrower / fallback options:
+
 - `seed remove-user` — removes everything *seedling manages* (Python
-  installs, venvs, VS Code, cloned repos, uv, its own source) but leaves
-  the `seed` shell hook in your profile.
-- `seed purge`, or `uninstall.cmd` (`sh ./uninstall.cmd` on macOS/Linux) —
-  removes the `seed` shell hook from your profile **and** deletes
-  `~/seedling` entirely, for a full clean removal. `seed purge` is the same
-  operation reachable from inside `seed` itself, for when you don't have
-  the original installer files handy.
+  installs, venvs, VS Code, cloned repos, uv, its own source) but **leaves
+  the `seed` shell hook** in your profile, so a later reinstall picks back
+  up cleanly.
+- `uninstall.cmd` (Windows) / `sh ./uninstall.cmd` (macOS/Linux) — the
+  **standalone fallback for when `seed` itself is broken** and `seed purge`
+  can't run. Run from your copy of the repo; it needs no working seed-cli
+  (pure shell/PowerShell). It resolves the install location the same way
+  the installer did — `SEEDLING_HOME` env override, else `seedling.conf`'s
+  `SEEDLING_HOME_DIR` with `~`/`{user}` expansion — so relocated and
+  shared-root installs are targeted correctly. (For removing *other* users'
+  installs on a shared machine, that's the elevated
+  [`admin-*` family](#admin-commands-shared-root-teardown) instead.)
+
+If you have *neither* a working `seed` *nor* the repo, you can pipe the
+uninstaller straight from GitHub — the same one-liner shape as the
+installer (pipe the underlying `installers/uninstall.*`, not `uninstall.cmd`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/uninstall.sh | sh
+```
+```powershell
+irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/uninstall.ps1 | iex
+```
+
+Piped like this there's no local `seedling.conf` to read, so it targets the
+**default `~/seedling`**. For a relocated or `{user}` install, tell it where
+to look with `SEEDLING_HOME`:
+
+```sh
+curl -fsSL .../installers/uninstall.sh | SEEDLING_HOME="/opt/seedling/alice" sh
+```
+```powershell
+$env:SEEDLING_HOME = "D:\seedling\alice"; irm .../installers/uninstall.ps1 | iex
+```
 
 ---
 

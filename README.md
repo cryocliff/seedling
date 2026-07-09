@@ -182,9 +182,10 @@ Command names follow one rule: **a bare noun is the primary action, and
 | `seed purge [-y] [--keep-repos]` | **Fully uninstalls seedling** — deletes `~/seedling` entirely *and* removes the `seed` shell hook from your profile. After this, `seed` stops existing as a command. `--keep-repos` preserves `~/seedling/repo` in a sibling folder first; without it, that folder *and* any leftover backup from a previous `--keep-repos` purge are both deleted. |
 | `seed where` | Prints the seedling home directory. |
 
-Run `uninstall.cmd` (Windows) or `sh ./uninstall.cmd` (macOS/Linux) to
-also remove the shell hook from your profile (i.e. remove `seed` itself, not
-just what it created).
+**To uninstall, run `seed purge`** — it deletes the install and removes the
+`seed` shell hook, knows its own location, and needs no leftover installer
+files. The standalone `uninstall.cmd` (Windows) / `sh ./uninstall.cmd`
+(macOS/Linux) is a fallback for when `seed` itself is broken and can't run.
 
 **Admin / multi-user teardown:** shared-root installs (`SEEDLING_HOME_DIR`
 with a `{user}` token) also get an elevated `admin-*` family for removing
