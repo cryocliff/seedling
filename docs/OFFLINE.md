@@ -202,8 +202,8 @@ A standard install ends by installing the newest Python and creating the
 auto-activated `dev` venv. Offline, this works **only if #3 and #4 are in
 place** (it needs an interpreter archive and the `ipython`/`ruff`
 packages), and the VS Code part only works pre-seeded (#6) — otherwise set
-`SEEDLING_AUTO_VSCODE="no"` alongside it. If none of it is ready yet, set
-`SEEDLING_AUTO_SETUP="no"` in your distributed `seedling.conf` — the install then finishes bare but working,
+`SEEDLING_AUTO_VSCODE="false"` alongside it. If none of it is ready yet, set
+`SEEDLING_AUTO_SETUP="false"` in your distributed `seedling.conf` — the install then finishes bare but working,
 and the setup can be run later per-machine:
 
 ```
@@ -259,7 +259,7 @@ both zero-touch for users:
   bundle is **rebuilt on every install**, so certificate rotation
   propagates with a plain reinstall.
 - **Use the OS trust store**: if IT already installs the corporate CA
-  machine-wide via policy, set `SEEDLING_NATIVE_TLS="yes"` in
+  machine-wide via policy, set `SEEDLING_NATIVE_TLS="true"` in
   `seedling.conf` instead — recorded as the `native_tls` setting and
   applied to uv as `UV_NATIVE_TLS`.
 

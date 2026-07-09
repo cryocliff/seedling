@@ -260,7 +260,7 @@ if (-not (Test-Path $SettingsFile)) {
     # environment variables themselves.
     if ($Conf["SEEDLING_PYTHON_MIRROR"]) { $seed["python_mirror"] = $Conf["SEEDLING_PYTHON_MIRROR"] }
     if ($Conf["SEEDLING_PACKAGE_INDEX"]) { $seed["package_index"] = $Conf["SEEDLING_PACKAGE_INDEX"] }
-    if ($Conf["SEEDLING_NATIVE_TLS"] -and (@("yes", "1", "true") -contains $Conf["SEEDLING_NATIVE_TLS"].ToLower())) {
+    if ($Conf["SEEDLING_NATIVE_TLS"] -and $Conf["SEEDLING_NATIVE_TLS"].ToLower() -eq "true") {
         $seed["native_tls"] = $true
     }
     if ($CertBundle) { $seed["ca_cert"] = "$CertBundle" }
@@ -290,7 +290,7 @@ if ($CertBundle -and -not $env:SSL_CERT_FILE) {
     $env:SSL_CERT_FILE = $CertBundle
     $env:GIT_SSL_CAINFO = $CertBundle
 }
-if ($Conf["SEEDLING_NATIVE_TLS"] -and (@("yes", "1", "true") -contains $Conf["SEEDLING_NATIVE_TLS"].ToLower()) -and -not $env:UV_NATIVE_TLS) {
+if ($Conf["SEEDLING_NATIVE_TLS"] -and $Conf["SEEDLING_NATIVE_TLS"].ToLower() -eq "true" -and -not $env:UV_NATIVE_TLS) {
     $env:UV_NATIVE_TLS = "1"
 }
 
@@ -351,7 +351,7 @@ if (-not (Test-Path $SeedCli)) { Die "seed-cli was not installed correctly." }
 # 4b. Default environment: the newest stable Python plus a 'dev' venv (with
 #     the default packages) that every new shell auto-activates -- so a
 #     fresh install is immediately usable with plain `python`/`ipython`.
-#     Skip with SEEDLING_AUTO_SETUP=no (env var or seedling.conf). Never
+#     Skip with SEEDLING_AUTO_SETUP="false" (env var or seedling.conf). Never
 #     fatal: a network hiccup here still leaves a working seedling.
 # ---------------------------------------------------------------------------
 $AutoSetup = if ($env:SEEDLING_AUTO_SETUP) {
@@ -359,11 +359,11 @@ $AutoSetup = if ($env:SEEDLING_AUTO_SETUP) {
 } elseif ($Conf["SEEDLING_AUTO_SETUP"]) {
     $Conf["SEEDLING_AUTO_SETUP"]
 } else {
-    "yes"
+    "true"
 }
 
 $DevReady = $false
-if (@("no", "0", "false") -contains $AutoSetup.ToLower()) {
+if ($AutoSetup.ToLower() -eq "false") {
     Info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AutoSetup)."
 } else {
     if (Test-Path (Join-Path $SeedlingHome "python\venvs\dev")) {
@@ -395,9 +395,9 @@ if (@("no", "0", "false") -contains $AutoSetup.ToLower()) {
     } elseif ($Conf["SEEDLING_AUTO_VSCODE"]) {
         $Conf["SEEDLING_AUTO_VSCODE"]
     } else {
-        "yes"
+        "true"
     }
-    if (@("no", "0", "false") -contains $AutoVscode.ToLower()) {
+    if ($AutoVscode.ToLower() -eq "false") {
         Info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AutoVscode)."
     } else {
         Info "Setting up VS Code ..."

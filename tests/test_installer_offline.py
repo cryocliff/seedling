@@ -19,10 +19,15 @@ PUBLIC_URL = "https://github.com/cryocliff/seedling.git"
 
 
 @pytest.fixture
-def install_env(tmp_path):
+def install_env(tmp_path, monkeypatch):
     """A repo copy + fake HOME with a stub uv pre-planted. Returns a runner
     that executes `sh ./install.cmd` (the polyglot entry point) and paths
-    for assertions."""
+    for assertions. The environment is scrubbed of SEEDLING_*/UV_*/SSL_*
+    so a stray or leaked var (e.g. UV_NATIVE_TLS set by another test's
+    config.apply_runtime_env) can't pollute the installer subprocess."""
+    import conftest
+    for var in conftest._ISOLATED_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
     copy = make_repo_copy(tmp_path / "copy")
     fake_home = tmp_path / "home"
     seedling_home = fake_home / "seedling"
@@ -63,7 +68,7 @@ def _write_conf(copy, **overrides):
 class TestDefaultInstall:
     def test_pristine_conf_is_a_no_op_plus_recorded_origin(self, install_env):
         copy, fake_home, home, run_install = install_env
-        result = run_install("SEEDLING_AUTO_SETUP=no")
+        result = run_install("SEEDLING_AUTO_SETUP=false")
         assert result.returncode == 0, result.stdout + result.stderr
         # source copied, minus .git and vendor
         assert (home / "system" / "src" / "src" / "pyproject.toml").exists()
@@ -87,18 +92,18 @@ class TestDefaultInstall:
 
     def test_auto_setup_skips(self, install_env):
         copy, fake_home, home, run_install = install_env
-        result = run_install("SEEDLING_AUTO_SETUP=no")
+        result = run_install("SEEDLING_AUTO_SETUP=false")
         assert "seed-cli python" not in _calls(home)
         (home / "system" / "bin" / "calls.log").unlink(missing_ok=True)
-        result = run_install("SEEDLING_AUTO_VSCODE=no")
+        result = run_install("SEEDLING_AUTO_VSCODE=false")
         calls = _calls(home)
         assert "seed-cli venv dev" in calls
         assert "vscode --no-open" not in calls
 
     def test_reinstall_never_stacks_hooks(self, install_env):
         copy, fake_home, home, run_install = install_env
-        run_install("SEEDLING_AUTO_SETUP=no")
-        run_install("SEEDLING_AUTO_SETUP=no")
+        run_install("SEEDLING_AUTO_SETUP=false")
+        run_install("SEEDLING_AUTO_SETUP=false")
         bashrc = (fake_home / ".bashrc").read_text()
         assert bashrc.count("seed.sh") == 1
 
@@ -112,7 +117,7 @@ class TestOrgConf:
             SEEDLING_PYTHON_MIRROR=r"S:\\share\\python-builds",
             SEEDLING_PACKAGE_INDEX=r"S:\\share\\wheels",
             SEEDLING_VENV_DEFAULT_PACKAGES="ipython,ruff,pandas",
-            SEEDLING_AUTO_SETUP="no",
+            SEEDLING_AUTO_SETUP="false",
         )
         result = run_install()
         assert result.returncode == 0, result.stdout + result.stderr
@@ -132,10 +137,41 @@ class TestOrgConf:
 
     def test_native_tls_conf(self, install_env):
         copy, fake_home, home, run_install = install_env
-        _write_conf(copy, SEEDLING_NATIVE_TLS="yes", SEEDLING_AUTO_SETUP="no")
+        _write_conf(copy, SEEDLING_NATIVE_TLS="true", SEEDLING_AUTO_SETUP="false")
         run_install()
         assert _settings(home)["native_tls"] is True
         assert "UV_NATIVE_TLS=1" in (home / "system" / "bin" / "uv-env.log").read_text()
+
+    def test_native_tls_false_is_off(self, install_env):
+        copy, fake_home, home, run_install = install_env
+        _write_conf(copy, SEEDLING_NATIVE_TLS="false", SEEDLING_AUTO_SETUP="false")
+        run_install()
+        s = _settings(home) or {}
+        assert "native_tls" not in s
+        env_log = home / "system" / "bin" / "uv-env.log"
+        assert "UV_NATIVE_TLS" not in (env_log.read_text() if env_log.exists() else "")
+
+
+class TestBoolSettings:
+    """The AUTO_* toggles are booleans: true runs, false skips. No yes/no."""
+
+    def test_auto_setup_true_via_conf_runs(self, install_env):
+        copy, fake_home, home, run_install = install_env
+        _write_conf(copy, SEEDLING_AUTO_SETUP="true", SEEDLING_AUTO_VSCODE="false")
+        run_install()
+        assert "seed-cli python" in _calls(home)
+
+    def test_auto_setup_false_via_conf_skips(self, install_env):
+        copy, fake_home, home, run_install = install_env
+        _write_conf(copy, SEEDLING_AUTO_SETUP="false")
+        run_install()
+        assert "seed-cli python" not in _calls(home)
+
+    def test_bool_is_case_insensitive(self, install_env):
+        copy, fake_home, home, run_install = install_env
+        _write_conf(copy, SEEDLING_AUTO_SETUP="FALSE")
+        run_install()
+        assert "seed-cli python" not in _calls(home)
 
 
 class TestVendorPayloads:
@@ -164,7 +200,7 @@ class TestVendorPayloads:
         # no pre-planted uv this time: the vendored one must be used
         import shutil
         shutil.rmtree(home / "system" / "bin")
-        result = run_install("SEEDLING_AUTO_SETUP=no")
+        result = run_install("SEEDLING_AUTO_SETUP=false")
         assert result.returncode == 0, result.stdout + result.stderr
         assert "Using vendored uv" in result.stdout
         assert (home / "system" / "bin" / "calls.log").exists(), \
@@ -182,11 +218,11 @@ class TestVendorPayloads:
     def test_reinstall_keeps_existing_binaries_but_rebuilds_certs(self, install_env):
         copy, fake_home, home, run_install = install_env
         self._plant_vendor(copy)
-        run_install("SEEDLING_AUTO_SETUP=no")
+        run_install("SEEDLING_AUTO_SETUP=false")
         marker = home / "extensions" / "git" / "cmd" / "git.exe"
         marker.write_text("user-modified")
         bundle = home / "system" / "certs" / "ca-bundle.pem"
         bundle.write_text("stale")
-        run_install("SEEDLING_AUTO_SETUP=no")
+        run_install("SEEDLING_AUTO_SETUP=false")
         assert marker.read_text() == "user-modified", "binaries must not be clobbered"
         assert "BEGIN CERTIFICATE" in bundle.read_text(), "certs must rotate on reinstall"

@@ -29,6 +29,11 @@ info()  { printf '\033[1;32m==>\033[0m %s\n' "$1"; }
 warn()  { printf '\033[1;33m!!\033[0m %s\n' "$1"; }
 die()   { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 
+# The AUTO_* / NATIVE_TLS conf settings are booleans -- "true" / "false"
+# (any case). AUTO_* default to true, NATIVE_TLS to false.
+is_false() { [ "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" = "false" ]; }
+is_true()  { [ "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" = "true" ]; }
+
 # ---------------------------------------------------------------------------
 # 1. Locate the seedling source (local checkout next to this script, or clone)
 # ---------------------------------------------------------------------------
@@ -283,13 +288,11 @@ if [ ! -f "$SETTINGS_FILE" ]; then
 "
         entries="$entries  \"package_index\": \"$(json_escape "$SEEDLING_PACKAGE_INDEX")\""
     fi
-    case "$SEEDLING_NATIVE_TLS" in
-        yes|YES|Yes|1|true|TRUE|True)
-            [ -n "$entries" ] && entries="$entries,
+    if is_true "$SEEDLING_NATIVE_TLS"; then
+        [ -n "$entries" ] && entries="$entries,
 "
-            entries="$entries  \"native_tls\": true"
-            ;;
-    esac
+        entries="$entries  \"native_tls\": true"
+    fi
     if [ -n "$CERT_BUNDLE" ]; then
         [ -n "$entries" ] && entries="$entries,
 "
@@ -328,14 +331,10 @@ if [ -n "$CERT_BUNDLE" ] && [ -z "${SSL_CERT_FILE:-}" ]; then
     GIT_SSL_CAINFO="$CERT_BUNDLE"
     export SSL_CERT_FILE GIT_SSL_CAINFO
 fi
-case "$SEEDLING_NATIVE_TLS" in
-    yes|YES|Yes|1|true|TRUE|True)
-        if [ -z "${UV_NATIVE_TLS:-}" ]; then
-            UV_NATIVE_TLS=1
-            export UV_NATIVE_TLS
-        fi
-        ;;
-esac
+if is_true "$SEEDLING_NATIVE_TLS" && [ -z "${UV_NATIVE_TLS:-}" ]; then
+    UV_NATIVE_TLS=1
+    export UV_NATIVE_TLS
+fi
 
 if [ -n "$SEEDLING_PYTHON_MIRROR" ] && [ -z "${UV_PYTHON_INSTALL_MIRROR:-}" ]; then
     UV_PYTHON_INSTALL_MIRROR="$(to_file_url "$SEEDLING_PYTHON_MIRROR")"
@@ -411,7 +410,7 @@ SEED_CLI="$SEEDLING_HOME/system/bin/seed-cli"
 # 4b. Default environment: the newest stable Python plus a 'dev' venv (with
 #     the default packages) that every new shell auto-activates -- so a
 #     fresh install is immediately usable with plain `python`/`ipython`.
-#     Skip with SEEDLING_AUTO_SETUP=no (env var or seedling.conf). Never
+#     Skip with SEEDLING_AUTO_SETUP="false" (env var or seedling.conf). Never
 #     fatal: a network hiccup here still leaves a working seedling.
 # ---------------------------------------------------------------------------
 if [ -n "$SEEDLING_AUTO_SETUP_FROM_ENV" ]; then
@@ -419,15 +418,13 @@ if [ -n "$SEEDLING_AUTO_SETUP_FROM_ENV" ]; then
 elif [ -n "$SEEDLING_AUTO_SETUP" ]; then
     AUTO_SETUP="$SEEDLING_AUTO_SETUP"
 else
-    AUTO_SETUP="yes"
+    AUTO_SETUP="true"
 fi
 
 DEV_READY=0
-case "$AUTO_SETUP" in
-    no|NO|No|0|false|FALSE)
-        info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AUTO_SETUP)."
-        ;;
-    *)
+if is_false "$AUTO_SETUP"; then
+    info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AUTO_SETUP)."
+else
         if [ -d "$SEEDLING_HOME/python/venvs/dev" ]; then
             info "Default 'dev' venv already exists, leaving it as-is."
             DEV_READY=1
@@ -455,21 +452,17 @@ case "$AUTO_SETUP" in
         elif [ -n "$SEEDLING_AUTO_VSCODE" ]; then
             AUTO_VSCODE="$SEEDLING_AUTO_VSCODE"
         else
-            AUTO_VSCODE="yes"
+            AUTO_VSCODE="true"
         fi
-        case "$AUTO_VSCODE" in
-            no|NO|No|0|false|FALSE)
-                info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AUTO_VSCODE)."
-                ;;
-            *)
-                info "Setting up VS Code ..."
-                if ! env SEEDLING_HOME="$SEEDLING_HOME" "$SEED_CLI" vscode --no-open; then
-                    warn "VS Code setup didn't finish (network problem?). Install it later with:  seed vscode"
-                fi
-                ;;
-        esac
-        ;;
-esac
+        if is_false "$AUTO_VSCODE"; then
+            info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AUTO_VSCODE)."
+        else
+            info "Setting up VS Code ..."
+            if ! env SEEDLING_HOME="$SEEDLING_HOME" "$SEED_CLI" vscode --no-open; then
+                warn "VS Code setup didn't finish (network problem?). Install it later with:  seed vscode"
+            fi
+        fi
+fi
 
 # ---------------------------------------------------------------------------
 # 5. Write the `seed` shell function and hook it into the user's shell

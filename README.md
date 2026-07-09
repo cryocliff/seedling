@@ -33,7 +33,7 @@ seed vscode               # open the bundled, self-contained VS Code
 seed remove-user          # wipe everything seedling has ever created
 ```
 
-(Skip the default environment with `SEEDLING_AUTO_SETUP=no` before running
+(Skip the default environment with `SEEDLING_AUTO_SETUP=false` before running
 the installer, or by editing [`seedling.conf`](seedling.conf).)
 
 📖 **[Full documentation](docs/DOCUMENTATION.md)** covers every command and
@@ -121,7 +121,7 @@ What the installer actually does:
    still never have to have Python pre-installed).
 4. Sets up the default environment — newest stable Python, the
    auto-activated `dev` venv, and the portable VS Code — unless
-   `SEEDLING_AUTO_SETUP=no` (or `SEEDLING_AUTO_VSCODE=no` for just
+   `SEEDLING_AUTO_SETUP=false` (or `SEEDLING_AUTO_VSCODE=false` for just
    VS Code).
 5. Writes `seed.sh` / `seed.ps1` — a **shell function**, not just a binary —
    and hooks it into your shell profile.

@@ -151,8 +151,10 @@ def test_config_show_get_set_unset(run_cli, home):
 def test_config_native_tls_stores_real_bool(run_cli, home):
     run_cli("config", "set", "native_tls", "false")
     assert config.get("native_tls") is False
-    run_cli("config", "set", "native_tls", "yes")
+    run_cli("config", "set", "native_tls", "true")
     assert config.get("native_tls") is True
+    run_cli("config", "set", "native_tls", "FALSE")  # case-insensitive
+    assert config.get("native_tls") is False
 
 
 def test_config_get_unset_prints_nothing(run_cli, home):

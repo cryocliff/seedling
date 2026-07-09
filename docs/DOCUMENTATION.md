@@ -106,16 +106,16 @@ or environment variables:
 - `SEEDLING_VENV_DEFAULT_PACKAGES` (default: `ipython,ruff,ipykernel`) —
   comma-separated packages installed into every new venv (seeds the
   `venv_default_packages` setting).
-- `SEEDLING_AUTO_SETUP` (default: `yes`) — after installing seedling
+- `SEEDLING_AUTO_SETUP` (default: `true`) — after installing seedling
   itself, install the newest stable Python and create a `dev` venv (with
-  the default packages) that every new shell auto-activates. Set to `no`
+  the default packages) that every new shell auto-activates. Set to `false`
   for a bare install; the `SEEDLING_AUTO_SETUP` environment variable
   overrides for one run. Never fatal: if this step fails (e.g. offline),
   seedling itself is still installed and working.
-- `SEEDLING_AUTO_VSCODE` (default: `yes`) — also download and set up the
+- `SEEDLING_AUTO_VSCODE` (default: `true`) — also download and set up the
   portable VS Code during install, so `seed vscode` opens instantly
   instead of downloading ~130 MB on first use. Only applies when
-  `SEEDLING_AUTO_SETUP` is `yes`.
+  `SEEDLING_AUTO_SETUP` is `true`.
 - `SEEDLING_PYTHON_MIRROR` (default: empty = internet) — where `seed
   python` downloads interpreter builds: a URL of an internal mirror, or a
   plain directory of python-build-standalone archives on a share. Seeds
@@ -125,8 +125,8 @@ or environment variables:
   (the internet index is then disabled entirely). Seeds the
   `package_index` setting. See [OFFLINE.md](OFFLINE.md) for the full
   offline deployment guide.
-- `SEEDLING_NATIVE_TLS` (default: empty = bundled trust store) — set to
-  `yes` to trust the operating system's certificate store, for internal
+- `SEEDLING_NATIVE_TLS` (default: `false` = bundled trust store) — set to
+  `true` to trust the operating system's certificate store, for internal
   HTTPS hosts signed by a machine-installed corporate CA (seeds the
   `native_tls` setting). Alternatively, ship the CA itself in
   `vendor/certs/` — see [OFFLINE.md](OFFLINE.md).

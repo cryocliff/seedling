@@ -51,7 +51,7 @@ def test_installer_expands_user_token_per_user(tmp_path):
         return subprocess.run(
             [BASH, "-c",
              f"cd '{copy.as_posix()}' && HOME='{fake_home.as_posix()}' "
-             f"USER={user} SHELL=/bin/bash SEEDLING_AUTO_SETUP=no sh ./install.cmd"],
+             f"USER={user} SHELL=/bin/bash SEEDLING_AUTO_SETUP=false sh ./install.cmd"],
             capture_output=True, text=True, timeout=120)
 
     r1 = install_as("alice", "home_a")
