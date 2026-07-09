@@ -4,21 +4,29 @@ git_tool (lookup order, streamed tagging)."""
 from __future__ import annotations
 
 import io
+import os
 import subprocess
 import urllib.error
 
 import pytest
 
-from conftest import needs_git
+from conftest import needs_git, windows_only
 from seedling import git_tool, paths
 from seedling.commands import vscode_cmd
 
 
 def _preseed_vscode(home):
-    """A fake portable VS Code whose CLI script exists (Windows layout)."""
+    """A fake portable VS Code whose CLI script exists, in the layout the
+    current platform's detection looks for: bin/code.cmd on Windows, an
+    executable bin/code on POSIX."""
     bin_dir = home / "extensions" / "vscode" / "app" / "bin"
     bin_dir.mkdir(parents=True)
-    (bin_dir / "code.cmd").write_text("@echo off\r\nexit /b 0\r\n")
+    if os.name == "nt":
+        (bin_dir / "code.cmd").write_text("@echo off\r\nexit /b 0\r\n")
+    else:
+        code = bin_dir / "code"
+        code.write_text("#!/bin/sh\nexit 0\n")
+        code.chmod(0o755)
 
 
 def test_install_short_circuits_when_preseeded(home, monkeypatch):
@@ -28,7 +36,7 @@ def test_install_short_circuits_when_preseeded(home, monkeypatch):
     monkeypatch.setattr(vscode_cmd, "_resolve_download", boom)
     cli = vscode_cmd.install(force=False)
     assert cli is not None
-    assert "code.cmd" in cli[-1]
+    assert cli[-1].endswith("code.cmd" if os.name == "nt" else "code")
 
 
 def test_no_open_installs_without_window(run_cli, home, monkeypatch):
@@ -82,6 +90,7 @@ def test_find_git_prefers_path(home):
     assert str(git_tool.GIT_DIR) not in found
 
 
+@windows_only  # the bundled MinGit fallback only applies on Windows
 def test_find_git_falls_back_to_bundled(home, monkeypatch):
     monkeypatch.setattr(git_tool.shutil, "which", lambda name: None)
     bundled = git_tool.GIT_DIR / "cmd"

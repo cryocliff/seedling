@@ -156,21 +156,28 @@ def answer(monkeypatch):
 
 
 def make_venv_dirs(home: Path, *names: str) -> None:
-    """Fake venv folders (with a Windows-style interpreter) for tests that
-    only need the directory to exist."""
+    """Fake venv folders with a platform-appropriate interpreter, placed
+    exactly where seedling looks for it (Scripts\\python.exe on Windows,
+    bin/python on POSIX) so `status`/health checks treat them as real venvs."""
     for name in names:
-        d = home / "python" / "venvs" / name / "Scripts"
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "python.exe").write_text("")
-        (d.parent / "pyvenv.cfg").write_text("version = 3.12.0\n")
+        venv = home / "python" / "venvs" / name
+        interp = (venv / "Scripts" / "python.exe") if os.name == "nt" \
+            else (venv / "bin" / "python")
+        interp.parent.mkdir(parents=True, exist_ok=True)
+        interp.write_text("")
+        (venv / "pyvenv.cfg").write_text("version = 3.12.0\n")
 
 
 def make_base_python(home: Path, tag: str, dirname: str) -> Path:
-    """Fake base-python install with a matching alias file."""
+    """Fake base-python install with a matching alias file and a
+    platform-appropriate interpreter -- python.exe on Windows, bin/python3 on
+    POSIX, matching what `status` and venv creation resolve."""
     base = home / "python" / "base"
     target = base / dirname
-    target.mkdir(parents=True, exist_ok=True)
-    (target / "python.exe").write_text("")
+    interp = (target / "python.exe") if os.name == "nt" \
+        else (target / "bin" / "python3")
+    interp.parent.mkdir(parents=True, exist_ok=True)
+    interp.write_text("")
     (base / f"{tag}.alias.json").write_text('{"target": "%s"}' % dirname)
     return target
 

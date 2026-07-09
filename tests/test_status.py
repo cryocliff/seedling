@@ -70,18 +70,26 @@ def test_missing_ca_cert_fails(run_cli, home):
 
 
 def test_stale_hook_detection(run_cli, home, monkeypatch, tmp_path):
-    """A profile hook line pointing at a deleted seed.ps1 must WARN."""
+    """A profile hook line pointing at a deleted seed script must WARN, and a
+    present target reads as OK. Uses the current platform's profile + script
+    name (and native path separators) so the target actually resolves."""
+    import os
     fake_userhome = tmp_path / "userhome"
-    profile_dir = fake_userhome / "Documents" / "WindowsPowerShell"
-    profile_dir.mkdir(parents=True)
-    (profile_dir / "Microsoft.PowerShell_profile.ps1").write_text(
-        f'. "{home}\\system\\shell\\seed.ps1"\n')
+    if os.name == "nt":
+        profile = (fake_userhome / "Documents" / "WindowsPowerShell"
+                   / "Microsoft.PowerShell_profile.ps1")
+        seed_script = home / "system" / "shell" / "seed.ps1"
+    else:
+        profile = fake_userhome / ".bashrc"
+        seed_script = home / "system" / "shell" / "seed.sh"
+    profile.parent.mkdir(parents=True, exist_ok=True)
+    profile.write_text(f'. "{seed_script}"\n')
     import pathlib
     monkeypatch.setattr(pathlib.Path, "home", staticmethod(lambda: fake_userhome))
     code, out = run_cli("status")
     assert "stale seedling hook" in out
     # now make the hook target real -> OK
-    (home / "system" / "shell").mkdir(parents=True, exist_ok=True)
-    (home / "system" / "shell" / "seed.ps1").write_text("")
+    seed_script.parent.mkdir(parents=True, exist_ok=True)
+    seed_script.write_text("")
     code, out = run_cli("status")
     assert "shell hook installed" in out
