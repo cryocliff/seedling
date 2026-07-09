@@ -248,11 +248,15 @@ def _strip_all_hooks(shared_root) -> int:
     marker = str(shared_root)
     count = 0
     for profile in admin.all_user_profiles():
-        if not profile.exists():
-            continue
         try:
+            if not profile.exists():
+                continue
             lines = profile.read_text().splitlines()
         except OSError:
+            # Best-effort across every user's home: a profile we lack rights
+            # to even stat (another user's file, a 0700 home like /root when
+            # not elevated) is skipped, not fatal. `exists()` itself calls
+            # stat(), so the guard has to cover it too -- not just read_text().
             continue
         kept = [ln for ln in lines
                 if not (ln.strip() == "# seedling"
