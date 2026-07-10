@@ -18,7 +18,7 @@ ALL_COMMANDS = [
     "activate", "deactivate", "install", "uninstall", "package-list",
     "repo-clone", "repo-list", "repo-cd", "repo-vscode", "repo-open",
     "repo-install", "remove-repo",
-    "vscode", "summary", "status", "logs-viewer", "config", "where",
+    "vscode", "summary", "health-check", "logs-viewer", "config", "where",
     "kill-processes", "update-commands", "remove-user", "purge",
 ]
 

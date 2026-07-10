@@ -62,7 +62,7 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ]),
     ("Utilities", [
         ("summary", "[--sizes]", "Show everything seedling has installed"),
-        ("status", "", "Health-check the whole seedling install"),
+        ("health-check", "", "Health-check the whole seedling install"),
         ("logs-viewer", "[--days N]", "Open the command logs in a browser"),
         ("config", "[get|set|unset]", "View or change seedling settings"),
         ("kill-processes", "<all|name>", "Force-close python/VS Code (or named) processes"),
@@ -266,7 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_summary.add_argument("--sizes", action="store_true",
                             help="Also compute disk usage per item (slower)")
 
-    sub.add_parser("status", help="Health-check the whole seedling install")
+    sub.add_parser("health-check", help="Health-check the whole seedling install")
 
     p_logs = sub.add_parser(
         "logs-viewer",
@@ -391,7 +391,7 @@ def _dispatch_main(argv: list[str]) -> int:
         "kill-processes": kill_cmd.run,
         "update-commands": update_cmd.run,
         "summary": summary_cmd.run,
-        "status": status_cmd.run,
+        "health-check": status_cmd.run,
         "logs-viewer": logs_viewer_cmd.run,
         "config": config_cmd.run,
         "admin-purge-all-users": admin_cmd.purge_all_users,

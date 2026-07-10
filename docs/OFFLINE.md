@@ -263,7 +263,7 @@ both zero-touch for users:
   `seedling.conf` instead — recorded as the `native_tls` setting and
   applied to uv as `UV_NATIVE_TLS`.
 
-`seed status` verifies the recorded bundle still exists, and explicitly
+`seed health-check` verifies the recorded bundle still exists, and explicitly
 set `SSL_CERT_FILE`/`UV_NATIVE_TLS` environment variables always win over
 the settings.
 

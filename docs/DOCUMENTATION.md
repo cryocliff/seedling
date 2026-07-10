@@ -478,7 +478,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | Python interpreters *(structural — the base installs venvs are built from)* | `python [ver]` *(install)*, `python-list`, `remove-python` |
 | Venvs & packages *(day-to-day environment work)* | `venv <name>` *(create)*, `venv-list`, `activate`, `deactivate`, `venv-default`, `install`, `uninstall`, `package-list`, `remove-venv`, `remove-venv-all` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
-| Everyday / singletons | `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `vscode`, `summary`, `health-check`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
 
 **Python interpreters** — structural commands: the base installs that venvs
 are built from. Most days you never touch these after the first install.
@@ -1029,15 +1029,21 @@ seed summary
 seed summary --sizes
 ```
 
-### `seed status`
+### `seed health-check`
 
-The health check. Verifies each moving part and prints one `OK` / `WARN` /
-`FAIL` line per check: uv actually runs, git is available, the config file
+The health check. Verifies each moving part and prints one line per check
+with three columns: a **STATUS** (`OK` / `WARN` / `FAIL`), a cyan **AREA**
+label saying what the check is about (`uv`, `git`, `config`, `python`,
+`venv`, `updates`, `defaults`, `certs`, `offline`, `shell`, `logs`), and the
+detail. It checks: uv actually runs, git is available, the config file
 parses, every base Python alias resolves to a real interpreter, every venv
 has its interpreter and its base Python still exists, the configured
-defaults (`default_base`, `default_venv`) point at things that exist, an
-`update_source` is recorded (and, for a directory source, looks like a
-seedling tree), any offline `python_mirror`/`package_index` directories
+defaults (`default_base`, `default_venv`) point at things that exist, the
+`update_source` is recorded **and actually verified** — a git URL gets a
+reachability probe (`git ls-remote`, 10-second timeout, prompt-proofed so it
+can never hang asking for credentials), and a directory source must exist
+and look like a seedling tree (an unmounted share is reported as exactly
+that, not assumed to be a URL) — any offline `python_mirror`/`package_index` directories
 and `ca_cert` bundle exist, the `seed` shell hook is installed and not
 stale (a hook line
 pointing at a deleted file gets a loud warning), and the log directory is
@@ -1048,7 +1054,7 @@ command exit 1 (useful in scripts/CI); `WARN` is informational (nothing
 installed yet, no git, etc.) and doesn't affect the exit code.
 
 ```
-seed status
+seed health-check
 ```
 
 ### `seed logs-viewer [--days N] [--no-open]`

@@ -151,7 +151,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | Python interpreters *(structural — the base installs venvs are built from)* | `python [ver]` *(install)*, `python-list`, `remove-python` |
 | Venvs & packages *(day-to-day environment work)* | `venv <name>` *(create)*, `venv-list`, `activate`, `deactivate`, `venv-default`, `install`, `uninstall`, `package-list`, `remove-venv`, `remove-venv-all` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
-| Everyday / singletons | `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `vscode`, `summary`, `health-check`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
 
 | Command | What it does |
 |---|---|
@@ -180,7 +180,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | `seed kill-processes <name> [-y]` | Force-closes every process with that exact name (e.g. `seed kill-processes node`). |
 | `seed update-commands` | Explicitly updates the `seed` CLI itself. See below — nothing else ever does this automatically. |
 | `seed summary [--sizes]` | One screen showing everything seedling has installed: tooling, base Pythons, venvs, repos, VS Code, and settings. `--sizes` adds disk usage. |
-| `seed status` | Health check: verifies uv, git, config, every base Python and venv, the defaults, and the shell hook. Exit code 1 if anything is actually broken. |
+| `seed health-check` | Verifies uv, git, config, every base Python and venv, the defaults, `update_source` reachability, and the shell hook — one line each with a STATUS, a cyan AREA label, and the detail. Exit code 1 if anything is actually broken. |
 | `seed logs-viewer [--days N]` | Renders the command logs into a self-contained, offline HTML page and opens it in your browser — with search, a failures-only filter, an interactive date-range picker, and collapsible per-command output. `--no-open` just writes the file. |
 | `seed config` | Views/changes seedling settings (`get`/`set`/`unset`): the default base Python, a `default_venv` auto-activated by every new shell, the `venv_default_packages` list, and `update_source` (see below). |
 | `seed remove-user [-y]` | Deletes `~/seedling` entirely, after confirming. Leaves the `seed` shell hook in place. |
@@ -312,7 +312,7 @@ src/
     fsutil.py         retrying, cwd-aware directory deletion (see docs/DOCUMENTATION.md)
     colors.py         minimal ANSI color helper (NO_COLOR/non-tty aware)
     commands/         one module per `seed` command (python, venv, activate, repo,
-                      vscode, kill, update, summary, status, config, remove, purge, ...)
+                      vscode, kill, update, summary, health-check, config, remove, purge, ...)
     shell/
       seed.sh.template   copied to ~/seedling/system/shell/seed.sh at install time
       seed.ps1.template  copied to ~/seedling/system/shell/seed.ps1 at install time
