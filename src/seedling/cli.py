@@ -35,9 +35,11 @@ from .uv_tool import UvNotFound
 # alphabetized block, which stops being readable somewhere around a dozen
 # commands. This groups them the way a person actually thinks about them.
 _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
-    ("Python & venvs", [
+    ("Python interpreters -- the base installs venvs are built from", [
         ("python", "[version]", "Install a base Python (newest stable if no version)"),
         ("python-list", "", "List installed base Python interpreters"),
+    ]),
+    ("Venvs & packages -- day-to-day environment work", [
         ("venv", "<name> [--python <tag>]", "Create a venv from a base Python"),
         ("venv-list", "", "List venvs, and which one is active"),
         ("activate", "<name>", "Activate a venv in this shell"),

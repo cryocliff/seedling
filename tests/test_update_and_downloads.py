@@ -104,6 +104,64 @@ def test_url_update_falls_back_when_clone_fails(run_cli, home, src_installed, tm
     assert calls, "reinstall should still run"
 
 
+# --- self-update: rename-aside so a running seed-cli can be replaced ---------
+# On Windows, `uv tool install --force --reinstall` must delete the tool venv
+# whose python.exe IS the running seed-cli -- deletion of a running exe fails
+# (and uv gets partway, bricking the install). update-commands renames the
+# live copies aside first; these tests pin that behavior.
+
+from conftest import windows_only
+import subprocess as _sp
+
+
+def _plant_live_cli(home):
+    tool = home / "system" / "tool" / "seedling" / "Scripts"
+    tool.mkdir(parents=True, exist_ok=True)
+    (tool / "python.exe").write_text("live interpreter")
+    shim = home / "system" / "bin" / "seed-cli.exe"
+    shim.parent.mkdir(parents=True, exist_ok=True)
+    shim.write_text("live shim")
+    return tool.parent, shim
+
+
+@windows_only
+def test_self_update_renames_live_copies_aside(run_cli, home, src_installed):
+    tooldir, shim = _plant_live_cli(home)
+    code, out = run_cli("update-commands")
+    assert code == 0
+    # the live copies were moved aside (uv is stubbed, so nothing recreated them)
+    assert not tooldir.exists() and not shim.exists()
+    assert list(tooldir.parent.glob("seedling.old-*")), "tool venv not set aside"
+    assert list(shim.parent.glob("seed-cli.exe.old-*")), "shim not set aside"
+
+
+@windows_only
+def test_self_update_rolls_back_when_reinstall_fails(run_cli, home, src_installed, monkeypatch):
+    from seedling import uv_tool
+    tooldir, shim = _plant_live_cli(home)
+
+    def boom(args, **kw):
+        raise _sp.CalledProcessError(2, ["uv", *args])
+    monkeypatch.setattr(uv_tool, "run", boom)
+
+    code, out = run_cli("update-commands")
+    assert code == 1
+    assert "previous seed CLI was restored" in out
+    # the live copies are back where they were, contents intact
+    assert (tooldir / "Scripts" / "python.exe").read_text() == "live interpreter"
+    assert shim.read_text() == "live shim"
+    assert not list(tooldir.parent.glob("seedling.old-*"))
+
+
+def test_self_update_sweeps_leftovers_from_previous_run(run_cli, home, src_installed):
+    leftover = home / "system" / "tool" / "seedling.old-99999"
+    leftover.mkdir(parents=True)
+    (leftover / "python.exe").write_text("stale")
+    code, out = run_cli("update-commands")
+    assert code == 0
+    assert not leftover.exists()
+
+
 # --- shell integration refresh ----------------------------------------------
 # update-commands must re-render system/shell/seed.{ps1,sh} from the (just
 # refreshed) templates -- template changes would otherwise only reach users

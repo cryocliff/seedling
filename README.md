@@ -148,11 +148,10 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 
 | Family | Commands |
 |---|---|
-| Python | `python [ver]` *(install)*, `python-list`, `remove-python` |
-| Venvs | `venv <name>` *(create)*, `venv-list`, `remove-venv`, `remove-venv-all`, `venv-default` |
+| Python interpreters *(structural — the base installs venvs are built from)* | `python [ver]` *(install)*, `python-list`, `remove-python` |
+| Venvs & packages *(day-to-day environment work)* | `venv <name>` *(create)*, `venv-list`, `activate`, `deactivate`, `venv-default`, `install`, `uninstall`, `package-list`, `remove-venv`, `remove-venv-all` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
-| Packages | `install`, `uninstall`, `package-list` |
-| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
 
 | Command | What it does |
 |---|---|

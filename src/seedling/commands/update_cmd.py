@@ -20,10 +20,15 @@ refreshed templates so shell-side changes ship with updates too.
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
 from pathlib import Path
 
 from .. import colors, config, fsutil, paths, shell_integration, uv_tool, git_tool
+
+# Suffix for the rename-aside trick below; also what the sweep looks for.
+_ASIDE_MARKER = ".old-"
 
 
 def _swap_in(src: Path, tmp: Path) -> bool:
@@ -86,6 +91,60 @@ def _refresh_from_url(src: Path, url: str) -> bool:
     return _swap_in(src, tmp)
 
 
+def _self_install_targets() -> list[Path]:
+    """What `uv tool install` must replace: the tool venv (whose python.exe
+    IS the currently running seed-cli) and the seed-cli shim."""
+    exe = "seed-cli.exe" if os.name == "nt" else "seed-cli"
+    return [paths.TOOL_DIR / "seedling", paths.BIN_DIR / exe]
+
+
+def _sweep_aside_leftovers() -> None:
+    """Delete the renamed-aside copies a PREVIOUS update left behind (see
+    _move_running_self_aside). By now that update's process has long exited,
+    so they delete normally. Best-effort."""
+    for target in _self_install_targets():
+        for leftover in target.parent.glob(target.name + _ASIDE_MARKER + "*"):
+            fsutil.robust_rmtree(leftover)
+
+
+def _move_running_self_aside() -> list[tuple[Path, Path]]:
+    """The self-update trick that keeps `uv tool install --force --reinstall`
+    from failing with 'Access is denied' on Windows: the reinstall must
+    DELETE the tool venv, but this very process is running from its
+    python.exe -- Windows refuses to delete a running executable (and, worse,
+    uv gets partway before failing, leaving a gutted install with a broken
+    `seed`). Windows DOES allow renaming a running executable's tree, so the
+    live copies are renamed aside, uv installs into fresh paths, and the
+    aside copies are swept on the NEXT update (or rolled back if uv fails).
+    Returns [(original, aside), ...] for rollback."""
+    if os.name != "nt":
+        return []  # POSIX replaces in-use files fine
+    moved = []
+    for target in _self_install_targets():
+        if not target.exists():
+            continue
+        aside = target.with_name(target.name + _ASIDE_MARKER + str(os.getpid()))
+        try:
+            target.rename(aside)
+            moved.append((target, aside))
+        except OSError:
+            pass  # locked harder than expected; let uv try its luck as-is
+    return moved
+
+
+def _roll_back_aside(moved: list[tuple[Path, Path]]) -> None:
+    """uv failed mid-install: put the renamed-aside live copies back so the
+    user still has a working `seed` (the failure must never brick the CLI)."""
+    for original, aside in reversed(moved):
+        try:
+            if original.exists():
+                fsutil.robust_rmtree(original)  # uv's partial debris
+            aside.rename(original)
+        except OSError:
+            print(f"warning: couldn't restore {original} from {aside}; "
+                  "if `seed` stops working, re-run the installer.")
+
+
 def run(args) -> int:
     src = paths.SRC_DIR
     if not src.exists():
@@ -112,8 +171,18 @@ def run(args) -> int:
               "gives this command somewhere to update from.")
 
     print("Reinstalling the seed CLI ...")
-    # The python package (pyproject.toml) lives in src/ within the repo tree.
-    uv_tool.run(["tool", "install", "--force", "--reinstall", str(src / "src")], env=uv_tool.tool_install_env())
+    _sweep_aside_leftovers()
+    moved = _move_running_self_aside()
+    try:
+        # The python package (pyproject.toml) lives in src/ within the repo tree.
+        uv_tool.run(["tool", "install", "--force", "--reinstall", str(src / "src")],
+                    env=uv_tool.tool_install_env())
+    except (subprocess.CalledProcessError, uv_tool.UvNotFound):
+        _roll_back_aside(moved)
+        print("The reinstall failed; the previous seed CLI was restored and "
+              "still works. Fix the problem above and re-run "
+              "`seed update-commands`.")
+        return 1
 
     # The `seed` shell FUNCTION (system/shell/seed.ps1|.sh, hooked into the
     # user's profile by the installer) is part of "the commands" too --

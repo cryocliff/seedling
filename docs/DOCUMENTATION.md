@@ -475,11 +475,13 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 
 | Family | Commands |
 |---|---|
-| Python | `python [ver]` *(install)*, `python-list`, `remove-python` |
-| Venvs | `venv <name>` *(create)*, `venv-list`, `remove-venv`, `remove-venv-all`, `venv-default` |
+| Python interpreters *(structural — the base installs venvs are built from)* | `python [ver]` *(install)*, `python-list`, `remove-python` |
+| Venvs & packages *(day-to-day environment work)* | `venv <name>` *(create)*, `venv-list`, `activate`, `deactivate`, `venv-default`, `install`, `uninstall`, `package-list`, `remove-venv`, `remove-venv-all` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
-| Packages | `install`, `uninstall`, `package-list` |
-| Everyday / singletons | `activate`, `deactivate`, `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `vscode`, `summary`, `status`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+
+**Python interpreters** — structural commands: the base installs that venvs
+are built from. Most days you never touch these after the first install.
 
 ### `seed python [version]`
 
@@ -538,6 +540,11 @@ cascades rather than leaving them broken.
 ```
 seed remove-python 311
 ```
+
+---
+
+**Venvs & packages** — the day-to-day family: creating and switching
+environments, and installing packages into them.
 
 ### `seed venv <name> [--python <tag>] [--no-default-packages]`
 
@@ -912,6 +919,14 @@ In every mode it finishes by re-rendering the `seed` shell function
 templates, so shell-side changes ship with updates too. Your profile hook
 points at that file by path, so the refresh takes effect in new shells
 automatically — nothing in your profile is touched.
+
+Replacing a running CLI is inherently delicate on Windows (the reinstall
+must delete the tool venv whose `python.exe` is executing the update, and
+Windows refuses to delete running executables). `seed update-commands`
+handles this by *renaming* the live tool venv and `seed-cli` shim aside
+(allowed even while running), installing fresh, and sweeping the set-aside
+copies on the next update. If the reinstall fails partway, the previous
+copies are renamed back, so a failed update always leaves a working `seed`.
 
 ```
 seed update-commands
