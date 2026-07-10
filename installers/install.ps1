@@ -20,7 +20,17 @@ $DefaultVenvPackages = "ipython,ruff,ipykernel"
 
 function Info($msg)  { Write-Host "==> $msg" -ForegroundColor Green }
 function Warn($msg)  { Write-Host "!! $msg" -ForegroundColor Yellow }
-function Die($msg)   { Write-Host "error: $msg" -ForegroundColor Red; exit 1 }
+function Die($msg)   {
+    Write-Host "error: $msg" -ForegroundColor Red
+    # The exit-code marker is what `seed logs-viewer` parses to show whether
+    # this install completed; Stop-Transcript both finalizes the install log
+    # and -- for piped `irm | iex` installs, where no process exit is coming
+    # -- stops the transcript from silently recording the user's session
+    # forever after. Guarded: transcription may never have started.
+    Write-Host "seedling install FAILED (exit code 1)"
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 1
+}
 
 # seedling.conf is the deployment config: organizations distributing
 # seedling from their own git host or a network drive set the source (and
@@ -380,6 +390,40 @@ $DevReady = $false
 if ($AutoSetup.ToLower() -eq "false") {
     Info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AutoSetup)."
 } else {
+    # VS Code setup starts FIRST, as a background job: it's independent of
+    # the python/venv steps and dominated by a ~300MB download, so it
+    # overlaps them instead of adding its whole duration to the install.
+    # SEEDLING_NO_LOG=1 keeps the background run from interleaving with the
+    # foreground seed commands inside the daily log; its output is replayed
+    # below (which also lands it in the install transcript). Idempotent
+    # (skips if already present) and never fatal. Note: the job runs in its
+    # own runspace where $ErrorActionPreference is the default 'Continue',
+    # so uv/seed-cli writing progress to stderr can't become a fatal
+    # NativeCommandError there.
+    $AutoVscode = if ($env:SEEDLING_AUTO_VSCODE) {
+        $env:SEEDLING_AUTO_VSCODE
+    } elseif ($Conf["SEEDLING_AUTO_VSCODE"]) {
+        $Conf["SEEDLING_AUTO_VSCODE"]
+    } else {
+        "true"
+    }
+    $VscodeJob = $null
+    if ($AutoVscode.ToLower() -eq "false") {
+        Info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AutoVscode)."
+    } else {
+        Info "Setting up VS Code in the background (continues while Python is set up) ..."
+        $VscodeJob = Start-Job -ScriptBlock {
+            # NOT `param($cli, $home)`: $home is PowerShell's read-only
+            # automatic variable, and binding a parameter to it kills the
+            # job instantly ("Cannot overwrite variable home").
+            param($cli, $seedHome)
+            $env:SEEDLING_HOME = $seedHome
+            $env:SEEDLING_NO_LOG = "1"
+            & $cli vscode --no-open
+            "SEEDVSC_EXIT=$LASTEXITCODE"
+        } -ArgumentList $SeedCli, $SeedlingHome
+    }
+
     if (Test-Path (Join-Path $SeedlingHome "python\venvs\dev")) {
         Info "Default 'dev' venv already exists, leaving it as-is."
         $DevReady = $true
@@ -402,22 +446,63 @@ if ($AutoSetup.ToLower() -eq "false") {
         }
     }
 
-    # VS Code too, so `seed vscode` opens instantly instead of downloading
-    # on first use. Idempotent (skips if already present) and never fatal.
-    $AutoVscode = if ($env:SEEDLING_AUTO_VSCODE) {
-        $env:SEEDLING_AUTO_VSCODE
-    } elseif ($Conf["SEEDLING_AUTO_VSCODE"]) {
-        $Conf["SEEDLING_AUTO_VSCODE"]
-    } else {
-        "true"
-    }
-    if ($AutoVscode.ToLower() -eq "false") {
-        Info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AutoVscode)."
-    } else {
-        Info "Setting up VS Code ..."
-        $env:SEEDLING_HOME = $SeedlingHome
-        & $SeedCli vscode --no-open
-        if ($LASTEXITCODE -ne 0) {
+    # Collect the background VS Code job: replay its buffered output, pick
+    # out the exit-code sentinel, and warn -- never fail -- on a bad exit.
+    # $ErrorActionPreference is relaxed JUST around Receive-Job: the job's
+    # error stream can hold native-stderr records (uv progress etc.), and
+    # receiving those under 'Stop' throws a fatal NativeCommandError
+    # (verified); under 'Continue' the `*>&1` merge turns them into plain
+    # replayable strings.
+    if ($VscodeJob) {
+        Info "Waiting for the background VS Code setup to finish ..."
+        # Live status bar: seed-cli mirrors its progress into a one-line
+        # status file ("<phase> <done> <total>"); poll it and repaint one
+        # console line in place. Only repaint on change, so the install
+        # transcript doesn't fill with duplicate frames.
+        $StatusFile = Join-Path $SeedlingHome "extensions\vscode\setup-status"
+        $lastBar = ""
+        while ($VscodeJob.State -eq "Running") {
+            Start-Sleep -Milliseconds 500
+            $bar = "VS Code: setting up ..."
+            if (Test-Path $StatusFile) {
+                try {
+                    $parts = (Get-Content $StatusFile -TotalCount 1 -ErrorAction Stop) -split " "
+                    switch ($parts[0]) {
+                        "downloading" {
+                            $done = [long]$parts[1]; $total = [long]$parts[2]
+                            if ($total -gt 0) {
+                                $pct = [int](100 * $done / $total)
+                                $filled = [int]($pct / 5)
+                                $bar = ("VS Code: downloading [{0}{1}] {2,3}% of {3:N0} MB" -f
+                                        ("#" * $filled), ("-" * (20 - $filled)), $pct, ($total / 1MB))
+                            } else {
+                                $bar = ("VS Code: downloading {0:N0} MB ..." -f ($done / 1MB))
+                            }
+                        }
+                        "resolving"  { $bar = "VS Code: finding the latest build ..." }
+                        "extracting" { $bar = "VS Code: extracting ..." }
+                        "extensions" { $bar = "VS Code: installing extensions (Python, Jupyter, linting) ..." }
+                    }
+                } catch { }
+            }
+            if ($bar -ne $lastBar) {
+                Write-Host -NoNewline ("`r" + $bar.PadRight(78))
+                $lastBar = $bar
+            }
+        }
+        if ($lastBar) { Write-Host ("`r" + (" " * 78) + "`r") -NoNewline }
+        Wait-Job $VscodeJob | Out-Null
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $vscodeLines = @(Receive-Job $VscodeJob *>&1 | ForEach-Object { "$_" })
+        $ErrorActionPreference = $prevEap
+        Remove-Job $VscodeJob -Force -ErrorAction SilentlyContinue
+        $vscodeExit = 1
+        foreach ($line in $vscodeLines) {
+            if ($line -match '^SEEDVSC_EXIT=(-?\d+)$') { $vscodeExit = [int]$Matches[1] }
+            elseif ($line) { Write-Host $line }
+        }
+        if ($vscodeExit -ne 0) {
             Warn "VS Code setup didn't finish (network problem?). Install it later with:  seed vscode"
         }
     }
@@ -473,3 +558,11 @@ Write-Host ""
 Write-Host "Note: seed-cli was installed from a private copy at $SrcDir."
 Write-Host "Nothing updates it automatically -- run 'seed update-commands' whenever"
 Write-Host "you want to pull in changes."
+
+# Completion marker for `seed logs-viewer` (it parses the exit code out of
+# this exact line), then finalize the install log. Stop-Transcript matters
+# most for piped `irm | iex` installs: without it the transcript keeps
+# recording the user's session long after the install finished. Guarded:
+# transcription may never have started (locked logs dir).
+Write-Host "seedling install completed (exit code 0)"
+try { Stop-Transcript | Out-Null } catch { }

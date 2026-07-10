@@ -37,13 +37,29 @@ def sha256_of(path: Path) -> str:
 
 
 def fetch(url: str, dest: Path, *, expected_sha256: str | None = None,
-          label: str = "file") -> None:
+          label: str = "file",
+          on_progress=None) -> None:
     """Download `url` to `dest`, verifying its SHA-256 when one is known.
     `expected_sha256` accepts bare hex or the 'sha256:<hex>' form GitHub's
-    API uses. Raises ChecksumMismatch (and removes the file) on mismatch."""
+    API uses. Raises ChecksumMismatch (and removes the file) on mismatch.
+
+    `on_progress(done_bytes, total_bytes)` is called after every chunk;
+    `total_bytes` is 0 when the server sent no Content-Length. Callbacks are
+    expected to do their own throttling."""
     req = urllib.request.Request(url, headers={"User-Agent": "seedling"})
     with urllib.request.urlopen(req) as resp, open(dest, "wb") as f:
-        shutil.copyfileobj(resp, f)
+        if on_progress is None:
+            shutil.copyfileobj(resp, f)
+        else:
+            total = int(resp.headers.get("Content-Length") or 0)
+            done = 0
+            while True:
+                chunk = resp.read(256 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                done += len(chunk)
+                on_progress(done, total)
 
     if not expected_sha256:
         print(colors.warn(

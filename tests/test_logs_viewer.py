@@ -70,16 +70,40 @@ def test_install_log_block_format_becomes_an_install_entry(home):
 
 def test_install_log_raw_transcript_becomes_one_entry(home):
     # install.ps1 (Start-Transcript) writes a raw transcript, not block format.
+    # The explicit completion marker is what carries the exit code.
     paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
     (paths.LOGS_DIR / "install-20260709-142530.log").write_text(
         "**********************\nWindows PowerShell transcript start\n"
-        "==> Cloning ...\n==> seedling is installed.\n", encoding="utf-8")
+        "==> Cloning ...\n==> seedling is installed.\n"
+        "seedling install completed (exit code 0)\n", encoding="utf-8")
     entries = lv.collect_entries()
     assert len(entries) == 1
     e = entries[0]
-    assert e["kind"] == "install" and e["exit"] is None
+    assert e["kind"] == "install" and e["exit"] == 0
     assert e["ts"] == "2026-07-09 14:25:30"  # from the filename
     assert "seedling is installed" in e["output"]
+
+
+def test_install_transcript_failure_marker_yields_exit_1(home):
+    paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    (paths.LOGS_DIR / "install-20260709-150000.log").write_text(
+        "transcript start\nerror: git is required to clone x.\n"
+        "seedling install FAILED (exit code 1)\n", encoding="utf-8")
+    assert lv.collect_entries()[0]["exit"] == 1
+
+
+def test_install_transcript_without_marker_falls_back(home):
+    # Logs written before the marker existed: the human-facing success line
+    # means completed; nothing at all means unknown (crashed / interrupted).
+    paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    (paths.LOGS_DIR / "install-20260708-090000.log").write_text(
+        "transcript start\n==> seedling is installed.\ntranscript end\n",
+        encoding="utf-8")
+    (paths.LOGS_DIR / "install-20260708-080000.log").write_text(
+        "transcript start\n==> Installing uv ...\n", encoding="utf-8")
+    entries = {e["ts"][11:13]: e["exit"] for e in lv.collect_entries()}
+    assert entries["09"] == 0     # legacy success line -> completed
+    assert entries["08"] is None  # nothing to go on -> unknown
 
 
 def test_install_log_utf16_bom_is_decoded(home):

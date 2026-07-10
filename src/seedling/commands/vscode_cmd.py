@@ -45,6 +45,42 @@ _QUIET = {
 }
 
 
+def _write_status(phase: str, done: int = 0, total: int = 0) -> None:
+    """One-line machine-readable progress ('<phase> <done> <total>') for the
+    installers' background-job status bar: they poll this file while waiting
+    on `seed vscode --no-open`. Written via replace so pollers never see a
+    half-written line; never fatal -- a status bar must not break installs."""
+    try:
+        paths.VSCODE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = paths.VSCODE_DIR / "setup-status.tmp"
+        tmp.write_text(f"{phase} {done} {total}\n")
+        os.replace(tmp, paths.VSCODE_DIR / "setup-status")
+    except OSError:
+        pass
+
+
+def _download_progress_reporter():
+    """An on_progress callback for download.fetch that mirrors progress into
+    the status file, throttled to one write per whole-percent (or per 8 MB
+    when the size is unknown) so a 300MB download doesn't mean thousands of
+    file writes."""
+    last = {"pct": -1, "mb": -1}
+
+    def on_progress(done: int, total: int) -> None:
+        if total > 0:
+            pct = done * 100 // total
+            if pct != last["pct"]:
+                last["pct"] = pct
+                _write_status("downloading", done, total)
+        else:
+            mb = done // (8 * 1024 * 1024)
+            if mb != last["mb"]:
+                last["mb"] = mb
+                _write_status("downloading", done, 0)
+
+    return on_progress
+
+
 def _os_build() -> tuple[str, str]:
     """Return (download-os-id, archive-kind) for the current platform."""
     system = platform.system()
@@ -178,15 +214,18 @@ def install(force: bool = False) -> list[str] | None:
         return cli
 
     os_id, kind = _os_build()
+    _write_status("resolving")
     url, sha256 = _resolve_download(os_id)
     tmp_archive = paths.VSCODE_DIR / f"vscode-download.{'zip' if kind == 'zip' else 'tar.gz'}"
 
     paths.VSCODE_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Downloading VS Code from {url} ...")
     try:
-        download.fetch(url, tmp_archive, expected_sha256=sha256, label="VS Code")
+        download.fetch(url, tmp_archive, expected_sha256=sha256, label="VS Code",
+                       on_progress=_download_progress_reporter())
     except download.ChecksumMismatch as e:
         print(f"error: {e}")
+        _write_status("failed")
         return None
     except OSError as e:
         # Clean failure instead of a traceback -- e.g. an offline network.
@@ -194,7 +233,9 @@ def install(force: bool = False) -> list[str] | None:
         # docs/OFFLINE.md.)
         print(f"error: VS Code could not be downloaded ({e}).")
         tmp_archive.unlink(missing_ok=True)
+        _write_status("failed")
         return None
+    _write_status("extracting")
     _extract(tmp_archive, paths.VSCODE_APP_DIR, kind)
     tmp_archive.unlink(missing_ok=True)
 
@@ -210,12 +251,36 @@ def install(force: bool = False) -> list[str] | None:
         print("VS Code was downloaded but its CLI script could not be located "
               "-- extensions won't be installed automatically. You can still "
               "install them by hand from within VS Code.")
+        _write_status("failed")
         gui = _find_gui_executable(paths.VSCODE_APP_DIR)
         return [str(gui)] if gui else None
 
     _write_default_settings()
 
     print("Installing default extensions (Python, Jupyter, linting)...")
+    _write_status("extensions")
+    _install_extensions(cli)
+
+    print(f"VS Code installed at {paths.VSCODE_APP_DIR}")
+    _write_status("done")
+    return cli
+
+
+def _install_extensions(cli: list[str]) -> None:
+    """Install the default extensions in ONE CLI invocation (the
+    --install-extension flag repeats) instead of nine separate processes --
+    saves ~8 process boots of the Node CLI, measured at roughly a second
+    each. NOT run as concurrent processes: that was tried and empirically
+    corrupts installs (ms-python.python races the parallel installs of its
+    own dependency extensions, pylance/debugpy, and fails). On failure, fall
+    back to one-at-a-time so a single bad extension can't sink the others."""
+    args = []
+    for ext in DEFAULT_EXTENSIONS:
+        args += ["--install-extension", ext]
+    result = subprocess.run([*cli, *args, "--force"], **_QUIET, check=False)
+    if result.returncode == 0:
+        return
+    print("  batch install failed; retrying extensions one at a time...")
     for ext in DEFAULT_EXTENSIONS:
         result = subprocess.run(
             [*cli, "--install-extension", ext, "--force"],
@@ -223,9 +288,6 @@ def install(force: bool = False) -> list[str] | None:
         )
         if result.returncode != 0:
             print(f"  warning: failed to install {ext} (exit {result.returncode})")
-
-    print(f"VS Code installed at {paths.VSCODE_APP_DIR}")
-    return cli
 
 
 def open_window(cli: list[str], path: str) -> None:

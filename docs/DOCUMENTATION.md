@@ -1067,8 +1067,13 @@ to inspect after the fact.
   PowerShell 5.1, redirecting a native command's stderr under
   `$ErrorActionPreference='Stop'` turns uv's normal progress into a fatal
   error, so the installer deliberately doesn't do that. The individual
-  `seed python` / `seed venv` / `seed vscode` setup steps still appear as
-  their own entries (they log themselves). (The transcript is UTF-16; the
+  `seed python` / `seed venv` setup steps still appear as their own entries
+  (they log themselves); the VS Code step runs as a background job during
+  install (overlapping the Python setup for speed), so its output shows up
+  inside the install log rather than as a separate entry. The installer ends
+  its log with an explicit `seedling install completed (exit code 0)` /
+  `FAILED (exit code 1)` marker, which is where the viewer's green/red
+  status badge for the install comes from. (The transcript is UTF-16; the
   viewer detects that automatically.)
 
 The page is written to `~/seedling/system/logs/logs-viewer.html` and

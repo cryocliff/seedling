@@ -151,10 +151,19 @@ def _install_files(days: int | None) -> list[Path]:
     return sorted(files, reverse=True)
 
 
+# install.ps1 prints this marker right before stopping its transcript; it's
+# how a raw-transcript install log communicates its outcome to the viewer.
+_PS_INSTALL_EXIT_RE = re.compile(
+    r"seedling install (?:completed|FAILED) \(exit code (-?\d+)\)")
+
+
 def _parse_install_file(path: Path) -> list[dict]:
     """A bootstrap log. install.sh writes the same block format as the daily
     logs (so it parses identically); install.ps1 writes a raw transcript,
-    which becomes a single entry timestamped from the filename."""
+    which becomes a single entry timestamped from the filename. The
+    transcript's exit code comes from the explicit completion marker; logs
+    from before that marker existed fall back to the human-facing
+    'seedling is installed.' success line, else remain unknown."""
     text = _read_log_text(path)
     if text.lstrip().startswith("=== ["):
         return _parse_file(path, kind="install")
@@ -164,8 +173,14 @@ def _parse_install_file(path: Path) -> list[dict]:
         ts = f"{d[0:4]}-{d[4:6]}-{d[6:8]} {t[0:2]}:{t[2:4]}:{t[4:6]}"
     else:
         ts = "0000-00-00 00:00:00"
+    exit_code: int | None = None
+    markers = _PS_INSTALL_EXIT_RE.findall(text)
+    if markers:
+        exit_code = int(markers[-1])
+    elif "seedling is installed." in text:
+        exit_code = 0
     return [{"ts": ts, "cmd": "installer (bootstrap)", "output": text.strip("\n"),
-             "exit": None, "kind": "install", "dur": None}]
+             "exit": exit_code, "kind": "install", "dur": None}]
 
 
 def collect_entries(days: int | None = None) -> list[dict]:

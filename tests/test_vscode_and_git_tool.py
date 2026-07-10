@@ -58,6 +58,44 @@ def test_vscode_opens_given_path(run_cli, home, monkeypatch, tmp_path):
     assert opened == [str(tmp_path)]
 
 
+def test_write_status_single_parseable_line(home):
+    # The installers poll this file for their status bar: one line,
+    # "<phase> <done> <total>", overwritten in place.
+    vscode_cmd._write_status("downloading", 1234, 5678)
+    from seedling import paths
+    status = (paths.VSCODE_DIR / "setup-status").read_text().strip()
+    assert status == "downloading 1234 5678"
+    vscode_cmd._write_status("done")
+    assert (paths.VSCODE_DIR / "setup-status").read_text().strip() == "done 0 0"
+
+
+def test_download_progress_reporter_throttles_by_percent(home):
+    from seedling import paths
+    report = vscode_cmd._download_progress_reporter()
+    # 1000 calls inside the same percent must not produce 1000 writes; the
+    # status file only reflects whole-percent transitions.
+    for done in range(0, 1001):
+        report(done, 100000)  # 0..1% territory
+    status = (paths.VSCODE_DIR / "setup-status").read_text().strip()
+    assert status == "downloading 1000 100000"  # last whole-percent (1%) write
+    report(50000, 100000)
+    assert "50000" in (paths.VSCODE_DIR / "setup-status").read_text()
+
+
+def test_fetch_reports_progress(home, tmp_path):
+    from seedling import download
+    src = tmp_path / "payload.bin"
+    src.write_bytes(b"x" * 700_000)  # bigger than one 256KB chunk
+    url = "file:///" + str(src).replace("\\", "/")
+    calls = []
+    download.fetch(url, tmp_path / "out.bin", expected_sha256=None,
+                   label="p", on_progress=lambda d, t: calls.append((d, t)))
+    assert len(calls) >= 2                      # chunked, not one shot
+    assert calls[-1][0] == 700_000              # final done == full size
+    assert all(t == 700_000 for _, t in calls)  # file:// provides a length
+    assert [d for d, _ in calls] == sorted(d for d, _ in calls)
+
+
 def test_offline_download_fails_cleanly(home, monkeypatch, capsys):
     """No pre-seed + no network must be a one-line error, not a traceback."""
     monkeypatch.setattr(

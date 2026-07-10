@@ -441,6 +441,35 @@ DEV_READY=0
 if is_false "$AUTO_SETUP"; then
     info "Skipping default environment setup (SEEDLING_AUTO_SETUP=$AUTO_SETUP)."
 else
+        # VS Code setup starts FIRST, in the background: it's independent of
+        # the python/venv steps and dominated by a ~300MB download, so it
+        # overlaps them instead of adding its whole duration to the install.
+        # SEEDLING_NO_LOG=1 keeps the background run from interleaving with
+        # the foreground seed commands inside the daily log; its output is
+        # buffered to a file and replayed below (which also lands it in the
+        # install log). Idempotent (skips if already present), never fatal.
+        if [ -n "$SEEDLING_AUTO_VSCODE_FROM_ENV" ]; then
+            AUTO_VSCODE="$SEEDLING_AUTO_VSCODE_FROM_ENV"
+        elif [ -n "$SEEDLING_AUTO_VSCODE" ]; then
+            AUTO_VSCODE="$SEEDLING_AUTO_VSCODE"
+        else
+            AUTO_VSCODE="true"
+        fi
+        VSCODE_PID=""
+        VSCODE_OUT=""
+        VSCODE_RC=""
+        if is_false "$AUTO_VSCODE"; then
+            info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AUTO_VSCODE)."
+        else
+            info "Setting up VS Code in the background (continues while Python is set up) ..."
+            VSCODE_OUT="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/seed-vscode-out.$$")"
+            VSCODE_RC="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/seed-vscode-rc.$$")"
+            ( env SEEDLING_HOME="$SEEDLING_HOME" SEEDLING_NO_LOG=1 \
+                  "$SEED_CLI" vscode --no-open >"$VSCODE_OUT" 2>&1
+              echo "$?" >"$VSCODE_RC" ) &
+            VSCODE_PID=$!
+        fi
+
         if [ -d "$SEEDLING_HOME/python/venvs/dev" ]; then
             info "Default 'dev' venv already exists, leaving it as-is."
             DEV_READY=1
@@ -460,21 +489,53 @@ else
             fi
         fi
 
-        # VS Code too, so `seed vscode` opens instantly instead of
-        # downloading on first use. Idempotent (skips if already present)
-        # and never fatal.
-        if [ -n "$SEEDLING_AUTO_VSCODE_FROM_ENV" ]; then
-            AUTO_VSCODE="$SEEDLING_AUTO_VSCODE_FROM_ENV"
-        elif [ -n "$SEEDLING_AUTO_VSCODE" ]; then
-            AUTO_VSCODE="$SEEDLING_AUTO_VSCODE"
-        else
-            AUTO_VSCODE="true"
-        fi
-        if is_false "$AUTO_VSCODE"; then
-            info "Skipping VS Code install (SEEDLING_AUTO_VSCODE=$AUTO_VSCODE)."
-        else
-            info "Setting up VS Code ..."
-            if ! env SEEDLING_HOME="$SEEDLING_HOME" "$SEED_CLI" vscode --no-open; then
+        # Collect the background VS Code setup started above. `|| true`
+        # because under `set -e` a non-zero child status from wait would
+        # abort the whole install -- VS Code stays non-fatal.
+        if [ -n "$VSCODE_PID" ]; then
+            info "Waiting for the background VS Code setup to finish ..."
+            # Live status bar: seed-cli mirrors its progress into a one-line
+            # status file ("<phase> <done> <total>"); poll it and repaint one
+            # line in place. Only repaint on change so the install log
+            # doesn't fill with duplicate frames.
+            _status_file="$SEEDLING_HOME/extensions/vscode/setup-status"
+            _last_bar=""
+            while kill -0 "$VSCODE_PID" 2>/dev/null; do
+                _bar="VS Code: setting up ..."
+                if [ -f "$_status_file" ]; then
+                    _ph=""; _d=0; _t=0
+                    read -r _ph _d _t < "$_status_file" 2>/dev/null || _ph=""
+                    # Sanitize before arithmetic: $((...)) on a non-number is
+                    # a FATAL shell error in dash, even without set -e.
+                    case "$_d" in ''|*[!0-9]*) _d=0 ;; esac
+                    case "$_t" in ''|*[!0-9]*) _t=0 ;; esac
+                    case "$_ph" in
+                        downloading)
+                            if [ "$_t" -gt 0 ]; then
+                                _pct=$(( _d * 100 / _t ))
+                                _bar="VS Code: downloading ${_pct}% of $(( _t / 1048576 )) MB"
+                            else
+                                _bar="VS Code: downloading $(( _d / 1048576 )) MB ..."
+                            fi ;;
+                        resolving)  _bar="VS Code: finding the latest build ..." ;;
+                        extracting) _bar="VS Code: extracting ..." ;;
+                        extensions) _bar="VS Code: installing extensions (Python, Jupyter, linting) ..." ;;
+                    esac
+                fi
+                if [ "$_bar" != "$_last_bar" ]; then
+                    printf '\r%-70s' "$_bar"
+                    _last_bar="$_bar"
+                fi
+                sleep 1
+            done
+            # Plain `[ -n ... ] && printf` would return 1 when no bar was
+            # ever painted, and set -e would abort the install on that.
+            if [ -n "$_last_bar" ]; then printf '\r%-70s\r' " "; fi
+            wait "$VSCODE_PID" || true
+            cat "$VSCODE_OUT" 2>/dev/null || true
+            _vscode_rc="$(cat "$VSCODE_RC" 2>/dev/null || echo 1)"
+            rm -f "$VSCODE_OUT" "$VSCODE_RC"
+            if [ "$_vscode_rc" != "0" ]; then
                 warn "VS Code setup didn't finish (network problem?). Install it later with:  seed vscode"
             fi
         fi
