@@ -7,7 +7,9 @@ color codes stripped), and the exit code.
 Implemented as a tee: sys.stdout/sys.stderr keep writing to the real
 terminal untouched (colors, isatty behavior, and the `seed activate
 --print-path` capture done by the shell wrapper all still work), while a
-plain-text copy lands in the log file.
+plain-text copy lands in the log file. ANSI color codes are stripped on
+purpose: the logs are plain text end to end so they can be shipped to a
+server, grepped, or displayed anywhere without escape-code handling.
 
 Logging never breaks the command itself: if the log file can't be created
 or written (locked, disk full, permissions), seedling silently carries on

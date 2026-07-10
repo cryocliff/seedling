@@ -151,6 +151,31 @@ def test_html_is_self_contained_and_escapes_output(home):
     assert "<\\/script>" in html
 
 
+def test_runlog_tee_strips_ansi_from_log_copy(home):
+    # Terminal gets colors untouched; the log copy is PLAIN text -- logs may
+    # be shipped to a server, so no escape-code handling downstream.
+    import io
+    from seedling import runlog
+    real, log = io.StringIO(), io.StringIO()
+    tee = runlog._Tee(real, log)
+    tee.write("\x1b[1;32mOK\x1b[0m plain\n")
+    assert real.getvalue() == "\x1b[1;32mOK\x1b[0m plain\n"  # terminal untouched
+    assert log.getvalue() == "OK plain\n"                     # log stripped
+
+
+def test_viewer_strips_stray_ansi_at_parse_time(home):
+    # Defense-in-depth: even if a log somehow contains codes (older seedling,
+    # a tool coloring despite the pipe), the viewer displays clean text.
+    _write_log("2026-07-08",
+               "\n=== [2026-07-08 09:00:01] seed status\n"
+               "\x1b[32mOK\x1b[0m uv runs\n"
+               "=== [09:00:02] exit code 0\n")
+    entries = lv.collect_entries()
+    assert entries[0]["output"] == "OK uv runs"
+    html = lv.render_html(entries)
+    assert "\\u001b" not in html  # nothing escape-coded reaches the page
+
+
 def test_viewer_has_interactive_date_range_controls(home):
     # The range picker filters the embedded data client-side, so the controls
     # and the range-filter logic must be present in the page.

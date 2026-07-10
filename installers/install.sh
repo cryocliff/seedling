@@ -602,6 +602,11 @@ echo
 echo "Note: seed-cli was installed from a private copy at $SEEDLING_HOME/system/src."
 echo "Nothing updates it automatically -- run 'seed update-commands' whenever"
 echo "you want to pull in changes."
+# sed strips ANSI codes from the combined stream before tee displays and
+# records it. Deliberate: the logs stay plain text end to end, so they can
+# be shipped to a server, grepped, or displayed anywhere with zero
+# escape-code handling (the live install output loses its colors in this
+# captured region -- that's the accepted cost).
 } 2>&1 | sed "s/$(printf '\033')\[[0-9;]*[A-Za-z]//g" | { if [ -n "$SEED_INSTALL_LOG" ]; then tee -a "$SEED_INSTALL_LOG"; else cat; fi; }
 
 # Close the install-capture block opened in step 1b: record the exit code in

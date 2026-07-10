@@ -38,6 +38,12 @@ _EXIT_RE = re.compile(r"^=== \[(\d{2}:\d{2}:\d{2})\] exit code (-?\d+)$")
 # install.ps1 (Start-Transcript) writes a raw transcript, handled as one entry.
 _INSTALL_RE = re.compile(r"^install-(\d{8})-(\d{6})\.log$")
 
+# The logs are written plain (runlog and install.sh both strip ANSI at the
+# source, so they can be shipped to a server as-is), but strip again at parse
+# time as defense-in-depth -- e.g. a log written by an older/newer seedling
+# or a tool that colored despite the pipe still displays clean.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
 VIEWER_FILENAME = "logs-viewer.html"
 
 
@@ -123,7 +129,7 @@ def _duration(start_ts: str, exit_time: str | None) -> int | None:
 
 
 def _finalize(entry: dict, kind: str = "command") -> dict:
-    out = "\n".join(entry["out"]).strip("\n")
+    out = _ANSI_RE.sub("", "\n".join(entry["out"])).strip("\n")
     return {"ts": entry["ts"], "cmd": entry["cmd"], "output": out,
             "exit": entry["exit"], "kind": kind,
             "dur": _duration(entry["ts"], entry.get("exit_time"))}
@@ -179,7 +185,8 @@ def _parse_install_file(path: Path) -> list[dict]:
         exit_code = int(markers[-1])
     elif "seedling is installed." in text:
         exit_code = 0
-    return [{"ts": ts, "cmd": "installer (bootstrap)", "output": text.strip("\n"),
+    return [{"ts": ts, "cmd": "installer (bootstrap)",
+             "output": _ANSI_RE.sub("", text).strip("\n"),
              "exit": exit_code, "kind": "install", "dur": None}]
 
 

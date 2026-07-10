@@ -77,7 +77,10 @@ class TestDefaultInstall:
         assert "installer (bootstrap)" in text
         assert "=== " in text and "exit code 0" in text   # block exit marker
         assert "seedling is installed" in text       # captured live output
-        assert "\x1b[" not in text                    # ANSI stripped, like daily logs
+        # Plain text end to end: logs may be shipped to a server, so ANSI is
+        # stripped at the source (info() always emits codes, so absence here
+        # proves the strip ran).
+        assert "\x1b[" not in text
 
     def test_pristine_conf_is_a_no_op_plus_recorded_origin(self, install_env):
         copy, fake_home, home, run_install = install_env

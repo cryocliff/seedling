@@ -420,7 +420,9 @@ Every `seed` invocation appends to a daily log file under
 
 - the exact command line and a timestamp,
 - everything the command printed — stdout *and* stderr, including the
-  tagged `[uv]`/`[git]` output — with ANSI color codes stripped,
+  tagged `[uv]`/`[git]` output — with ANSI color codes stripped, so the
+  logs are plain text end to end (shippable to a server, greppable, and
+  displayable anywhere with no escape-code handling),
 - and the exit code.
 
 Log files older than 30 days are pruned automatically. Logging never
