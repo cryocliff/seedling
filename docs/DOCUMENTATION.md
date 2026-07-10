@@ -392,8 +392,8 @@ vague "something might be in use" message.
 ## Help output & color
 
 `seed` (no arguments) or `seed -h`/`--help` shows commands grouped into
-Python & venvs / Git repos / VS Code / Utilities / a "danger zone" for
-everything destructive — rather than argparse's default flat, alphabetized
+Seedling Status / Python & venvs / Git repos / VS Code / Utilities / a
+"danger zone" for everything destructive — rather than argparse's default flat, alphabetized
 list, which stops being easy to scan once there are more than a handful of
 commands. Subcommand-specific help (`seed venv -h`, etc.) is unaffected and
 still uses argparse's normal per-command output.

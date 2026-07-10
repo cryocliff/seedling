@@ -35,6 +35,12 @@ from .uv_tool import UvNotFound
 # alphabetized block, which stops being readable somewhere around a dozen
 # commands. This groups them the way a person actually thinks about them.
 _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
+    ("Seedling Status", [
+        ("summary", "[--sizes]", "Show everything seedling has installed"),
+        ("health-check", "", "Health-check the whole seedling install"),
+        ("logs-viewer", "[--days N]", "Open the command logs in a browser"),
+        ("where", "", "Print the seedling home directory"),
+    ]),
     ("Python interpreters -- the base installs venvs are built from", [
         ("python", "[version]", "Install a base Python (newest stable if no version)"),
         ("python-list", "", "List installed base Python interpreters"),
@@ -61,13 +67,9 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("vscode", "[path] [--reinstall]", "Install (once) and open VS Code"),
     ]),
     ("Utilities", [
-        ("summary", "[--sizes]", "Show everything seedling has installed"),
-        ("health-check", "", "Health-check the whole seedling install"),
-        ("logs-viewer", "[--days N]", "Open the command logs in a browser"),
         ("config", "[get|set|unset]", "View or change seedling settings"),
         ("kill-processes", "<all|name>", "Force-close python/VS Code (or named) processes"),
         ("update-commands", "", "Update the seed CLI itself"),
-        ("where", "", "Print the seedling home directory"),
     ]),
     ("Danger zone -- these delete things (all support --preview)", [
         ("remove-repo", "<name>", "Delete a cloned repo"),
