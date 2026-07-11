@@ -104,6 +104,43 @@ class TestBashFunction:
             f"TMPDIR='{tmp_path.as_posix()}' seed purge")
         assert "Waiting" not in result.stdout
 
+    def test_purge_and_reinstall_runs_staged_script_after_wipe(self, tmp_path):
+        home = tmp_path / "seedling"
+        home.mkdir(parents=True)
+        sentinel = tmp_path / "reinstalled.sentinel"
+        reinstall = tmp_path / "seedling-reinstall.sh"
+        reinstall.write_text(f'#!/bin/sh\ntouch "{sentinel.as_posix()}"\n')
+        # Synchronous wipe, no deferred marker -- mirrors POSIX purge.
+        _stub_cli(home, textwrap.dedent(f"""\
+            if [ "$1" = "purge-and-reinstall" ]; then
+                rm -rf "{home.as_posix()}"
+            fi
+            exit 0
+        """))
+        rendered = _render_sh(tmp_path, home)
+        result = run_bash(
+            f"VIRTUAL_ENV=keep . '{rendered}'; "
+            f"TMPDIR='{tmp_path.as_posix()}' seed purge-and-reinstall")
+        assert "Reinstalling seedling" in result.stdout
+        assert sentinel.exists()               # reinstall script actually ran
+        assert not reinstall.exists()          # ... and was cleaned up
+
+    def test_purge_and_reinstall_skips_reinstall_if_home_survives(self, tmp_path):
+        home = tmp_path / "seedling"
+        home.mkdir(parents=True)
+        sentinel = tmp_path / "reinstalled.sentinel"
+        reinstall = tmp_path / "seedling-reinstall.sh"
+        reinstall.write_text(f'#!/bin/sh\ntouch "{sentinel.as_posix()}"\n')
+        # CLI reports success but the tree is NOT gone (e.g. a stuck file):
+        # the installer must never run against a half-deleted tree.
+        _stub_cli(home, 'exit 0\n')
+        rendered = _render_sh(tmp_path, home)
+        result = run_bash(
+            f"VIRTUAL_ENV=keep . '{rendered}'; "
+            f"TMPDIR='{tmp_path.as_posix()}' seed purge-and-reinstall")
+        assert "Reinstalling seedling" not in result.stdout
+        assert not sentinel.exists()
+
 
 @needs_powershell
 class TestPowerShellFunction:

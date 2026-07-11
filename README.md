@@ -71,11 +71,14 @@ the other places tools like this usually scatter files into. Deleting
 ## Install details
 
 The one-liners at the top bootstrap everything, the same way `uv`'s own
-installer does — no git clone, no download, nothing to know in advance
-beyond that one URL. (One exception, unrelated to installing seedling
-itself: `seed repo-clone` needs git — auto-bootstrapped on Windows, needs
-to already be present on macOS/Linux. See
-[DOCUMENTATION.md](docs/DOCUMENTATION.md) for why.)
+installer does — nothing to clone or download yourself, nothing to know in
+advance beyond that one URL. Under the hood the installer clones seedling
+with git; on **Windows** it bootstraps a portable git (MinGit) automatically
+if none is present, so a stock box needs nothing pre-installed, while on
+**macOS/Linux** git must already be available (there's no official portable
+build to bootstrap — the same reason `seed repo-clone` needs system git
+there). Installing from a **directory / network share** (origin #3 below)
+uses no git at all.
 
 The one-liners are origin #1 of **four ways to install** (each recorded so
 updates and reinstalls keep flowing from the same place — see
@@ -151,7 +154,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | Python interpreters *(structural — the base installs venvs are built from)* | `python [ver]` *(install)*, `python-list`, `remove-python` |
 | Venvs & packages *(day-to-day environment work)* | `venv <name>` *(create)*, `venv-list`, `activate`, `deactivate`, `venv-default`, `install`, `uninstall`, `package-list`, `remove-venv`, `remove-venv-all` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
-| Everyday / singletons | `vscode`, `summary`, `health-check`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `vscode`, `summary`, `health-check`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge`, `purge-and-reinstall` |
 
 | Command | What it does |
 |---|---|
@@ -185,6 +188,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | `seed config` | Views/changes seedling settings (`get`/`set`/`unset`): the default base Python, a `default_venv` auto-activated by every new shell, the `venv_default_packages` list, and `update_source` (see below). |
 | `seed remove-user [-y]` | Deletes `~/seedling` entirely, after confirming. Leaves the `seed` shell hook in place. |
 | `seed purge [-y] [--keep-repos]` | **Fully uninstalls seedling** — deletes `~/seedling` entirely *and* removes the `seed` shell hook from your profile. After this, `seed` stops existing as a command. `--keep-repos` preserves `~/seedling/repo` in a sibling folder first; without it, that folder *and* any leftover backup from a previous `--keep-repos` purge are both deleted. |
+| `seed purge-and-reinstall [-y]` | **Wipes and rebuilds seedling** — does a full purge, then reinstalls from the recorded `update_source` (the shell function runs the reinstall once the wipe is confirmed). Cloned repos are always preserved and restored into the fresh install. Prompts before falling back to the public repo if no source is recorded. |
 | `seed where` | Prints the seedling home directory. |
 
 **To uninstall, run `seed purge`** — it deletes the install and removes the

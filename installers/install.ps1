@@ -49,6 +49,71 @@ function Read-SeedlingConf($path) {
     return $conf
 }
 
+# Resolve a usable git for the clone below: system git if present, else
+# bootstrap a portable MinGit into $GitDir (extensions\git) -- the SAME
+# location and mechanism `seed repo-clone` uses (see git_tool.py), so the
+# copy is reused later and never downloaded twice. This is what lets the
+# public/self-hosted URL one-liners live up to "requires nothing
+# pre-installed" on a stock Windows box. Windows-only by nature: Git for
+# Windows ships an official dependency-free portable build (MinGit); macOS
+# and Linux have no equivalent, so install.sh keeps requiring system git.
+function Resolve-SeedlingGit {
+    param([string]$GitDir)
+
+    $sys = Get-Command git -ErrorAction SilentlyContinue
+    if ($sys) { return "git" }
+    foreach ($rel in @("cmd\git.exe", "bin\git.exe")) {
+        $existing = Join-Path $GitDir $rel
+        if (Test-Path $existing) { return $existing }
+    }
+
+    Info "git isn't installed -- downloading a portable copy (MinGit) into $GitDir ..."
+    New-Item -ItemType Directory -Force -Path $GitDir | Out-Null
+
+    # GitHub's release API publishes a per-asset SHA-256 digest, so the zip
+    # can be verified before it's extracted -- same policy as download.py.
+    $api = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+    try {
+        $release = Invoke-RestMethod -Uri $api -Headers @{ "User-Agent" = "seedling" }
+    } catch {
+        Die ("Could not reach GitHub's API to download MinGit ($($_.Exception.Message)). " +
+             "Install git and re-run, or download the '...-64-bit.zip' asset from " +
+             "https://github.com/git-for-windows/git/releases and extract it into $GitDir.")
+    }
+    # The 64-bit MinGit zip -- not the busybox variant, which lacks tools git
+    # needs for cloning over https.
+    $asset = $release.assets | Where-Object {
+        $_.name -like "MinGit-*-64-bit.zip" -and $_.name -notlike "*busybox*"
+    } | Select-Object -First 1
+    if (-not $asset) { Die "Could not find a MinGit release asset to download." }
+
+    $zip = Join-Path $GitDir "mingit-download.zip"
+    Info "Downloading $($asset.name) ..."
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -Headers @{ "User-Agent" = "seedling" }
+
+    if ($asset.digest) {
+        $expected = ($asset.digest -replace '^sha256:', '').ToLower()
+        $actual = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
+        if ($actual -ne $expected) {
+            Remove-Item -Force $zip -ErrorAction SilentlyContinue
+            Die ("SHA-256 verification FAILED for MinGit (expected $expected, got $actual). " +
+                 "The download was deleted -- try again on a trusted network.")
+        }
+        Info "Verified SHA-256 checksum for MinGit."
+    } else {
+        Warn "No published checksum was available for MinGit; skipping verification."
+    }
+
+    Expand-Archive -Path $zip -DestinationPath $GitDir -Force
+    Remove-Item -Force $zip -ErrorAction SilentlyContinue
+
+    foreach ($rel in @("cmd\git.exe", "bin\git.exe")) {
+        $exe = Join-Path $GitDir $rel
+        if (Test-Path $exe) { return $exe }
+    }
+    Die "MinGit was downloaded but its git.exe couldn't be located in $GitDir."
+}
+
 # ---------------------------------------------------------------------------
 # 1. Locate the seedling source (local checkout next to this script, or clone)
 # ---------------------------------------------------------------------------
@@ -131,12 +196,14 @@ if ($HasLocalCheckout) {
     $CleanupOriginalSrc = $false
     $InstalledFromDir = $SeedlingRepo
 } else {
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die "git is required to clone $SeedlingRepo." }
+    # No system git? Bootstrap portable MinGit into extensions\git before the
+    # clone, so a bare Windows box can still install from a URL.
+    $Git = Resolve-SeedlingGit (Join-Path $SeedlingHome "extensions\git")
     $OriginalSrc = Join-Path ([System.IO.Path]::GetTempPath()) ("seedling-src-" + [System.Guid]::NewGuid())
     $CleanupOriginalSrc = $true
     $CloneMode = $true
     Info "Cloning $SeedlingRepo ..."
-    git clone --depth 1 $SeedlingRepo $OriginalSrc
+    & $Git clone --depth 1 $SeedlingRepo $OriginalSrc
 }
 
 # ---------------------------------------------------------------------------

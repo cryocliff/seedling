@@ -78,6 +78,7 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("remove-python", "<tag>", "Delete a base Python and its venvs"),
         ("remove-user", "", "Delete everything seedling manages"),
         ("purge", "", "Full uninstall (also removes the shell hook)"),
+        ("purge-and-reinstall", "", "Wipe seedling and reinstall it fresh from its original source"),
     ]),
 ]
 
@@ -252,6 +253,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_purge.add_argument("--keep-repos", action="store_true",
                           help="Move ~/seedling/repo out to safety before deleting everything else")
 
+    # Like `purge`, but immediately reinstalls from the recorded update_source
+    # afterward. Cloned repos are always preserved (moved aside, then restored
+    # into the fresh install), so no --keep-repos flag here.
+    sub.add_parser(
+        "purge-and-reinstall", parents=[danger],
+        help="Wipe seedling and reinstall it fresh from the source it was originally installed from")
+
     p_kill = sub.add_parser(
         "kill-processes", parents=[danger],
         help="Force-close processes by name, or 'all' for python + VS Code")
@@ -390,6 +398,7 @@ def _dispatch_main(argv: list[str]) -> int:
         "remove-venv-all": venv_remove_cmd.run_all,
         "remove-venv": venv_remove_cmd.run_one,
         "purge": purge_cmd.run,
+        "purge-and-reinstall": purge_cmd.run,
         "kill-processes": kill_cmd.run,
         "update-commands": update_cmd.run,
         "summary": summary_cmd.run,

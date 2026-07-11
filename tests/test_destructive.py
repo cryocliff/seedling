@@ -197,6 +197,91 @@ def test_purge_strips_hook_lines_old_and_new_layouts(run_cli, home, monkeypatch,
     assert "unrelated line" in remaining
 
 
+# --- purge-and-reinstall ------------------------------------------------------
+
+def test_purge_and_reinstall_preview_reports_reinstall(run_cli, home):
+    paths.ensure_layout()
+    (home / "repo" / "proj").mkdir(parents=True)
+    config.set_value("update_source", "https://github.mycompany.com/t/seedling.git")
+    from seedling.commands import purge_cmd
+    marker = purge_cmd._reinstall_marker()
+    marker.unlink(missing_ok=True)
+
+    code, out = run_cli("purge-and-reinstall", "--preview")
+    assert code == 0
+    assert "Preview" in out and "nothing was changed" in out
+    assert "reinstalled from" in out
+    assert "github.mycompany.com" in out
+    assert "restored into the fresh install" in out
+    assert home.exists()               # preview touches nothing
+    assert not marker.exists()          # ... and stages no script
+
+
+def test_purge_and_reinstall_writes_script_and_keeps_repos(
+        run_cli, home, monkeypatch, tmp_path):
+    fake_userhome = tmp_path / "userhome"
+    fake_userhome.mkdir()
+    import pathlib
+    monkeypatch.setattr(pathlib.Path, "home", staticmethod(lambda: fake_userhome))
+    # Keep the staged reinstall script inside the sandbox.
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    paths.ensure_layout()
+    (home / "repo" / "proj").mkdir(parents=True)
+    (home / "repo" / "proj" / "file.txt").write_text("keep me")
+    source = r"S:\tools\seedling"
+    config.set_value("update_source", source)
+
+    code, out = run_cli("purge-and-reinstall", "-y")
+    assert code == 0
+    assert not home.exists()                       # wiped
+    assert "reinstalling now" in out.lower()
+
+    # Repos moved aside, ready for the reinstall script to restore.
+    backup = fake_userhome / "seedling-repo-backup"
+    assert (backup / "proj" / "file.txt").read_text() == "keep me"
+
+    from seedling.commands import purge_cmd
+    marker = purge_cmd._reinstall_marker()
+    content = marker.read_text()
+    assert source in content                       # source baked in
+    assert str(backup) in content                  # restore-from
+    assert str(paths.REPO_DIR) in content          # restore-into
+    assert "install" in content                    # runs the installer
+    marker.unlink(missing_ok=True)
+
+
+def test_purge_and_reinstall_no_source_aborts_without_wiping(run_cli, home, answer):
+    paths.ensure_layout()
+    from seedling.commands import purge_cmd
+    purge_cmd._reinstall_marker().unlink(missing_ok=True)
+    answer("no")                                   # decline the public-repo offer
+    code, out = run_cli("purge-and-reinstall")
+    assert code == 1
+    assert "Aborted" in out
+    assert "update_source" in out
+    assert home.exists()                           # nothing deleted
+    assert not purge_cmd._reinstall_marker().exists()
+
+
+def test_purge_and_reinstall_no_source_yes_uses_public(
+        run_cli, home, monkeypatch, tmp_path):
+    fake_userhome = tmp_path / "userhome"
+    fake_userhome.mkdir()
+    import pathlib
+    monkeypatch.setattr(pathlib.Path, "home", staticmethod(lambda: fake_userhome))
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    paths.ensure_layout()
+
+    code, out = run_cli("purge-and-reinstall", "-y")   # -y auto-accepts public repo
+    assert code == 0
+    assert not home.exists()
+
+    from seedling.commands import purge_cmd
+    marker = purge_cmd._reinstall_marker()
+    assert "github.com/cryocliff/seedling" in marker.read_text()
+    marker.unlink(missing_ok=True)
+
+
 # --- kill-processes (list/preview only; never actually kill in tests) --------
 
 def test_kill_processes_preview_lists_matches(run_cli, home):

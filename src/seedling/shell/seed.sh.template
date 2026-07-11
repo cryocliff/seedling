@@ -66,11 +66,13 @@ seed() {
         return 0
     fi
 
-    if [ "$1" = "purge" ] || [ "$1" = "remove-user" ]; then
+    if [ "$1" = "purge" ] || [ "$1" = "remove-user" ] || [ "$1" = "purge-and-reinstall" ]; then
         # These commands may finish their own deletion via an invisible
         # background helper. seed-cli has exited by then, so this
         # still-loaded function is the only thing left that can tell the
-        # user whether the cleanup actually succeeded.
+        # user whether the cleanup actually succeeded -- and, for
+        # purge-and-reinstall, run the reinstall seed-cli staged before it
+        # deleted its own executable.
         "$__SEEDLING_CLI" "$@"
         __seed_status=$?
         __seedling_deactivate_if_gone
@@ -90,6 +92,17 @@ seed() {
             else
                 echo "Confirmed: $__SEEDLING_HOME has been fully removed."
             fi
+        fi
+        # Reinstall only after the wipe is confirmed gone -- the installer
+        # must never run against a half-deleted tree.
+        __seed_reinstall="${TMPDIR:-/tmp}/seedling-reinstall.sh"
+        if [ "$1" = "purge-and-reinstall" ] && [ "$__seed_status" -eq 0 ] \
+           && [ ! -d "$__SEEDLING_HOME" ] && [ -f "$__seed_reinstall" ]; then
+            echo ""
+            echo "Reinstalling seedling ..."
+            sh "$__seed_reinstall"
+            __seed_status=$?
+            rm -f "$__seed_reinstall"
         fi
         return $__seed_status
     fi

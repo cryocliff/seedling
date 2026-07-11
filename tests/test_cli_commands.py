@@ -20,6 +20,7 @@ ALL_COMMANDS = [
     "repo-install", "remove-repo",
     "vscode", "summary", "health-check", "logs-viewer", "config", "where",
     "kill-processes", "update-commands", "remove-user", "purge",
+    "purge-and-reinstall",
 ]
 
 # handled specially in _dispatch_main rather than via the dispatch table

@@ -34,11 +34,16 @@ For a shorter quickstart, see [README.md](README.md).
 ## How installation works
 
 Nothing needs to be pre-installed to install seedling itself — not Python,
-not uv, not git (git is only needed if you install from a GitHub repo
-rather than a local checkout; see below). Separately, `seed repo-clone`
-(a feature *of* seedling, used after it's installed) needs git to work —
-on Windows, seedling downloads a portable copy automatically if none is
-found; see [`seed repo-clone`](#seed-repo-clone-git-url) for details.
+not uv, not git. Installing from a **git URL** (origins 1 and 4 below) does
+clone with git under the hood: on Windows the installer bootstraps a portable
+copy (MinGit) into `~/seedling/extensions/git` automatically if none is
+found, so even a stock box needs nothing; on macOS/Linux git must already be
+present (there's no official portable build to bootstrap there). Installing
+from a **local checkout** or a **directory/share** (origins 2 and 3) uses no
+git at all. Separately, `seed repo-clone` (a feature *of* seedling, used
+after it's installed) needs git the same way — reusing that same
+auto-bootstrapped portable copy on Windows; see
+[`seed repo-clone`](#seed-repo-clone-git-url) for details.
 
 ### The four ways to install
 
@@ -478,7 +483,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 | Python interpreters *(structural — the base installs venvs are built from)* | `python [ver]` *(install)*, `python-list`, `remove-python` |
 | Venvs & packages *(day-to-day environment work)* | `venv <name>` *(create)*, `venv-list`, `activate`, `deactivate`, `venv-default`, `install`, `uninstall`, `package-list`, `remove-venv`, `remove-venv-all` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
-| Everyday / singletons | `vscode`, `summary`, `health-check`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge` |
+| Everyday / singletons | `vscode`, `summary`, `health-check`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge`, `purge-and-reinstall` |
 
 **Python interpreters** — structural commands: the base installs that venvs
 are built from. Most days you never touch these after the first install.
@@ -1006,6 +1011,50 @@ seed purge -y --keep-repos
 seed purge
 ```
 
+### `seed purge-and-reinstall [-y]`
+
+The wipe-and-start-fresh command: everything `seed purge` does, then it
+**reinstalls seedling** from the source the original install recorded (the
+`update_source` setting — the git URL it was cloned from, or the directory it
+was copied from). Use it to rebuild a corrupted install, or to reset every
+base Python, venv, and package back to a clean slate in one step.
+
+**Cloned repos are always preserved.** They're moved to safety before the
+wipe (like `seed purge --keep-repos`) and then **restored** into the freshly
+reinstalled `~/seedling/repo`, so a reinstall never costs you your repos —
+no flag needed.
+
+How it works around a program not being able to delete-then-relaunch its own
+executable: seed-cli writes a small self-contained reinstall script to a temp
+path *outside* `~/seedling` (so it survives the wipe), then does the purge.
+The `seed` **shell function** — still loaded in your terminal after seed-cli
+exits — waits for the wipe to finish and then runs that script in the
+foreground, so you see the reinstall happen. Because this relies on the shell
+function, an existing install must have picked up this version first (run
+`seed update-commands` once); a brand-new command needs the updated `seed`
+either way. Open a new terminal afterward to pick up the fresh environment.
+
+If **no `update_source` is recorded** (possible for a local-checkout install
+with no git remote), it asks whether to reinstall from the public repo
+(`github.com/cryocliff/seedling`) and aborts *without deleting anything* if
+you decline — set a source first with
+`seed config set update_source <git-url-or-directory>`.
+
+Reinstalling has exactly the same requirements as a first-time install from
+the same source — this command adds none of its own. A **URL** source is
+`git clone`d by the installer: on **Windows** that needs no pre-installed git
+(the installer bootstraps a portable MinGit into `~/seedling/extensions/git`
+first, the same copy `seed repo-clone` uses), while on **macOS/Linux** git
+must already be on your PATH (there's no official portable build to bootstrap
+there). A **directory** source (e.g. a network share, the offline-install
+path) is reinstalled from in place with no git and no network.
+
+```
+seed purge-and-reinstall
+seed purge-and-reinstall --preview
+seed purge-and-reinstall -y
+```
+
 ### `seed where`
 
 Prints the seedling home directory (`~/seedling`, or the value of the
@@ -1268,6 +1317,10 @@ files.
 ```
 seed purge
 ```
+
+To wipe and immediately rebuild instead of just removing, use
+[`seed purge-and-reinstall`](#seed-purge-and-reinstall--y) — it purges and
+then reinstalls from the recorded source, preserving your cloned repos.
 
 Two narrower / fallback options:
 
