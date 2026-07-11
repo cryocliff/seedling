@@ -25,15 +25,7 @@ line.
 
 ## What seedling installs and manages for you
 
-```mermaid
-flowchart TB
-    U["You just want to write some Python"]
-    U --> Normal["<b>The usual way</b><br/>research, install, and connect several tools —<br/>hours of setup and decisions<br/>before your first line of code"]
-    U --> Seed["<b>With seedling</b><br/>run one command → open a terminal →<br/>you're writing Python"]
-
-    style Normal fill:#3a2020,stroke:#a33,color:#fff
-    style Seed fill:#1f3a24,stroke:#3a3,color:#fff
-```
+![The usual way means hours of setup before your first line of code; with seedling, one command and you're writing Python.](docs/diagrams/why-vs-usual.svg)
 
 **All handled automatically, so you don't have to think about it:**
 
@@ -68,14 +60,7 @@ irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install
 That one command does the whole setup for you — no follow-up steps, no
 configuration. When it finishes, you're ready to code:
 
-```mermaid
-flowchart LR
-    I["Run the<br/>one-liner"] --> B["seedling sets up everything<br/>Python needs, automatically"]
-    B --> T["Open a new<br/>terminal"]
-    T --> R["<b>python</b> just works<br/><b>seed install requests</b> adds packages<br/><b>seed vscode</b> opens the editor"]
-
-    style R fill:#1f3a24,stroke:#3a3,color:#fff
-```
+![Run the one-liner, seedling sets up everything Python needs, open a new terminal, and python just works.](docs/diagrams/install-flow.svg)
 
 Open a new terminal and go:
 
@@ -156,16 +141,7 @@ documents every command and flag.
 seedling never changes itself behind your back, and it's always cleanly
 reversible.
 
-```mermaid
-flowchart LR
-    Install["<b>Install</b><br/>one-liner"] --> Use["<b>Use</b><br/>seed venv / install / vscode"]
-    Use --> Update["<b>Update — only when you ask</b><br/>seed update-commands"]
-    Update --> Use
-    Use --> Uninstall["<b>Uninstall</b><br/>seed purge → gone, cleanly"]
-
-    style Install fill:#1f3a24,stroke:#3a3,color:#fff
-    style Uninstall fill:#3a2020,stroke:#a33,color:#fff
-```
+![Install with the one-liner, use seed to manage venvs and packages, update only when you ask, and uninstall cleanly with seed purge.](docs/diagrams/lifecycle.svg)
 
 - **Updates are explicit.** The installer copies seedling's source into
   `~/seedling` and runs from that private copy. New commits on GitHub — or

@@ -7,6 +7,8 @@ dist/
 
 # Sphinx docs build output (docs/conf.py); published by the Docs workflow.
 docs/_build/
+# docs/index.md is generated from README.md at build time (see docs/conf.py).
+docs/index.md
 
 # Distribution-only offline payloads (see docs/OFFLINE.md): uv binary,
 # portable git, pre-seeded VS Code. Never committed; placed by whoever

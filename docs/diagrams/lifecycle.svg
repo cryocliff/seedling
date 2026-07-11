@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 830 260" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-label="Timeline: install, then use day to day, then uninstall cleanly with seed purge; updating is an optional loop off using it">
+  <metadata id="mermaid-source" data-encoding="base64">Zmxvd2NoYXJ0IExSCiAgICBJbnN0YWxsWyI8Yj5JbnN0YWxsPC9iPjxici8+b25lLWxpbmVyIl0gLS0+IFVzZVsiPGI+VXNlPC9iPjxici8+c2VlZCB2ZW52IC8gaW5zdGFsbCAvIHZzY29kZSJdCiAgICBVc2UgLS0+IFVuaW5zdGFsbFsiPGI+VW5pbnN0YWxsPC9iPjxici8+c2VlZCBwdXJnZSDihpIgZ29uZSwgY2xlYW5seSJdCiAgICBVc2UgLS0+IFVwZGF0ZVsiPGI+VXBkYXRlPC9iPiAob3B0aW9uYWwpPGJyLz5zZWVkIHVwZGF0ZS1jb21tYW5kcyJdCiAgICBVcGRhdGUgLS0+IFVzZQoKICAgIHN0eWxlIEluc3RhbGwgZmlsbDojMWYzYTI0LHN0cm9rZTojM2EzLGNvbG9yOiNmZmYKICAgIHN0eWxlIFVzZSBmaWxsOiMyMjMwNGEsc3Ryb2tlOiM0N2EsY29sb3I6I2ZmZgogICAgc3R5bGUgVXBkYXRlIGZpbGw6IzIyMzA0YSxzdHJva2U6IzQ3YSxjb2xvcjojZmZmCiAgICBzdHlsZSBVbmluc3RhbGwgZmlsbDojM2EyMDIwLHN0cm9rZTojYTMzLGNvbG9yOiNmZmYK</metadata>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#8a8a8a"/>
+    </marker>
+  </defs>
+  <line x1="200" y1="75" x2="278" y2="75" stroke="#8a8a8a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="495" y1="75" x2="573" y2="75" stroke="#8a8a8a" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M373,110 V173" fill="none" stroke="#8a8a8a" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M403,175 V112" fill="none" stroke="#8a8a8a" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="30" y="40" width="170" height="70" rx="8" fill="#1f3a24" stroke="#3aaa5a" stroke-width="2"/>
+  <text x="115" y="70" text-anchor="middle" fill="#fff">
+    <tspan x="115" font-size="15" font-weight="bold">Install</tspan>
+    <tspan x="115" dy="22" font-size="13">one-liner</tspan>
+  </text>
+  <rect x="280" y="40" width="215" height="70" rx="8" fill="#22304a" stroke="#4a77aa" stroke-width="2"/>
+  <text x="388" y="70" text-anchor="middle" fill="#fff">
+    <tspan x="388" font-size="15" font-weight="bold">Use</tspan>
+    <tspan x="388" dy="22" font-size="13">seed venv / install / vscode</tspan>
+  </text>
+  <rect x="575" y="40" width="215" height="70" rx="8" fill="#3a2020" stroke="#aa3a3a" stroke-width="2"/>
+  <text x="683" y="70" text-anchor="middle" fill="#fff">
+    <tspan x="683" font-size="15" font-weight="bold">Uninstall</tspan>
+    <tspan x="683" dy="22" font-size="13">seed purge → gone, cleanly</tspan>
+  </text>
+  <rect x="280" y="175" width="215" height="70" rx="8" fill="#22304a" stroke="#4a77aa" stroke-width="2"/>
+  <text x="388" y="205" text-anchor="middle" fill="#fff">
+    <tspan x="388" font-size="14" font-weight="bold">Update <tspan font-weight="normal" font-size="12" fill="#cbd5e6">(optional)</tspan></tspan>
+    <tspan x="388" dy="22" font-size="13">seed update-commands</tspan>
+  </text>
+</svg>

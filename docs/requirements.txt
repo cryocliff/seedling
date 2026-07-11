@@ -1,7 +1,7 @@
 # Build-time dependencies for the Sphinx docs site (see docs/conf.py).
 # Not a runtime dependency of seedling itself -- only the docs workflow and
-# local `sphinx-build` need these.
+# local `sphinx-build` need these. Diagrams are pre-rendered SVGs, so no
+# mermaid/JS toolchain is needed to build the site.
 sphinx>=7,<9
 myst-parser>=3,<5
-furo>=2024.5
-sphinxcontrib-mermaid>=0.9,<2
+sphinx-rtd-theme>=3,<4

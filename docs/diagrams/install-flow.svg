@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 170" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-label="Run the one-liner, seedling sets everything up, open a terminal, and python just works">
+  <metadata id="mermaid-source" data-encoding="base64">Zmxvd2NoYXJ0IExSCiAgICBJWyJSdW4gdGhlPGJyLz5vbmUtbGluZXIiXSAtLT4gQlsic2VlZGxpbmcgc2V0cyB1cCBldmVyeXRoaW5nPGJyLz5QeXRob24gbmVlZHMsIGF1dG9tYXRpY2FsbHkiXQogICAgQiAtLT4gVFsiT3BlbiBhIG5ldzxici8+dGVybWluYWwiXQogICAgVCAtLT4gUlsiPGI+cHl0aG9uPC9iPiBqdXN0IHdvcmtzPGJyLz48Yj5zZWVkIGluc3RhbGwgcmVxdWVzdHM8L2I+IGFkZHMgcGFja2FnZXM8YnIvPjxiPnNlZWQgdnNjb2RlPC9iPiBvcGVucyB0aGUgZWRpdG9yIl0KCiAgICBzdHlsZSBSIGZpbGw6IzFmM2EyNCxzdHJva2U6IzNhMyxjb2xvcjojZmZmCg==</metadata>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#8a8a8a"/>
+    </marker>
+  </defs>
+  <line x1="152" y1="85" x2="186" y2="85" stroke="#8a8a8a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="442" y1="85" x2="476" y2="85" stroke="#8a8a8a" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="632" y1="85" x2="666" y2="85" stroke="#8a8a8a" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="20" y="52" width="130" height="66" rx="8" fill="#22304a" stroke="#4a77aa" stroke-width="2"/>
+  <text x="85" y="82" text-anchor="middle" fill="#fff" font-size="13">
+    <tspan x="85">Run the</tspan>
+    <tspan x="85" dy="18">one-liner</tspan>
+  </text>
+  <rect x="190" y="45" width="250" height="80" rx="8" fill="#22304a" stroke="#4a77aa" stroke-width="2"/>
+  <text x="315" y="80" text-anchor="middle" fill="#fff" font-size="13">
+    <tspan x="315">seedling sets up everything</tspan>
+    <tspan x="315" dy="18">Python needs, automatically</tspan>
+  </text>
+  <rect x="480" y="52" width="150" height="66" rx="8" fill="#22304a" stroke="#4a77aa" stroke-width="2"/>
+  <text x="555" y="82" text-anchor="middle" fill="#fff" font-size="13">
+    <tspan x="555">Open a new</tspan>
+    <tspan x="555" dy="18">terminal</tspan>
+  </text>
+  <rect x="670" y="37" width="290" height="96" rx="8" fill="#1f3a24" stroke="#3aaa5a" stroke-width="2"/>
+  <text x="815" y="72" text-anchor="middle" fill="#fff" font-size="13">
+    <tspan x="815"><tspan font-weight="bold">python</tspan> just works</tspan>
+    <tspan x="815" dy="20"><tspan font-weight="bold">seed install requests</tspan> adds packages</tspan>
+    <tspan x="815" dy="20"><tspan font-weight="bold">seed vscode</tspan> opens the editor</tspan>
+  </text>
+</svg>
