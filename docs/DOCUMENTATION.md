@@ -7,7 +7,8 @@ touches your system Python, `%APPDATA%`, `~/.vscode`, or any of the other
 places these tools normally scatter files into.
 
 This document covers every command and behavior as currently implemented.
-For a shorter quickstart, see [README.md](README.md).
+For a shorter quickstart, see the
+[README](https://github.com/cryocliff/seedling#readme).
 
 ---
 

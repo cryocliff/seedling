@@ -1,0 +1,59 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Lets you rebuild/redeploy from the Actions tab without a new commit.
+  workflow_dispatch:
+
+# Allow the deploy job to publish to GitHub Pages via OIDC.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deployment at a time; don't cancel an in-flight publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (sphinx)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv is what the rest of the project builds on; use it here too so the
+      # docs env is created and pinned the same way.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build the HTML docs
+        run: |
+          uv venv
+          uv pip install -r docs/requirements.txt
+          uv run sphinx-build -b html --fail-on-warning docs docs/_build/html
+
+      # Package the built site as a Pages artifact (also proves the build on
+      # pull requests, where the deploy job below is skipped).
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
+  deploy:
+    name: deploy (github pages)
+    needs: build
+    # Only the main branch publishes; PRs stop after the build above.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
