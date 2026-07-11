@@ -27,6 +27,8 @@ For a shorter quickstart, see [README.md](README.md).
 - [The update model](#the-update-model)
 - [Uninstalling](#uninstalling)
 - [Troubleshooting](#troubleshooting)
+- [Source layout (for contributors)](#source-layout-for-contributors)
+- [Running the tests](#running-the-tests)
 - [Known limits](#known-limits)
 
 ---
@@ -1395,6 +1397,45 @@ Windows this shouldn't happen — seedling downloads a portable copy
 automatically — but if it does (e.g. GitHub API rate-limiting), the error
 message includes a manual download link and the exact folder to extract it
 into.
+
+---
+
+## Source layout (for contributors)
+
+```
+README.md
+seedling.conf         deployment config: install/update source URL (or directory) + install-time settings
+install.cmd           generic installer entry point: batch on Windows, `sh ./install.cmd` on macOS/Linux
+uninstall.cmd         generic uninstaller entry point (same dual-platform trick)
+installers/
+  install.sh          the real POSIX installer (also what the curl one-liner runs)
+  install.ps1         the real Windows installer (also what the irm one-liner runs)
+  uninstall.sh / uninstall.ps1   full removal, including the shell hook (same end state as `seed purge`)
+docs/
+  DOCUMENTATION.md    the full documentation (this file)
+  OFFLINE.md          fully-offline / air-gapped deployment guide
+tests/
+  conftest.py         sandbox fixtures (throwaway home, stub uv, env isolation)
+  test_*.py           unit + CLI + offline/installer/shell-template integration tests
+src/
+  pyproject.toml      the python package definition (`uv tool install` targets this folder)
+  seedling/
+    cli.py            argparse dispatcher
+    paths.py          single source of truth for the ~/seedling folder layout
+    config.py         JSON config (default base, default venv, update source, etc.) + `seed config`'s KNOWN_KEYS
+    confirm.py        shared -y / --preview / --non-interactive handling for destructive commands
+    runlog.py         tees stdout/stderr into ~/seedling/system/logs/, one file per day
+    download.py       SHA-256-verifying download helper (MinGit, VS Code)
+    uv_tool.py        locates + invokes the sandboxed uv binary, tags its output `[uv]`
+    git_tool.py       locates git, bootstraps portable MinGit on Windows, tags streamed output `[git]`
+    fsutil.py         retrying, cwd-aware directory deletion (see "Why deletion is so defensive")
+    colors.py         minimal ANSI color helper (NO_COLOR/non-tty aware)
+    commands/         one module per `seed` command (python, venv, activate, repo,
+                      vscode, kill, update, summary, health-check, config, remove, purge, ...)
+    shell/
+      seed.sh.template   copied to ~/seedling/system/shell/seed.sh at install time
+      seed.ps1.template  copied to ~/seedling/system/shell/seed.ps1 at install time
+```
 
 ---
 
