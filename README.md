@@ -2,47 +2,52 @@
 
 [![CI](https://github.com/cryocliff/seedling/actions/workflows/ci.yml/badge.svg)](https://github.com/cryocliff/seedling/actions/workflows/ci.yml)
 
-**One command and one folder for everything Python.** Interpreters, isolated
-project environments, an editor, cloned repos, config, and logs all live in a
-single tidy folder — `~/seedling` — instead of scattered across your machine.
-Built on [`uv`](https://astral.sh/uv). Delete the folder and your computer is
-exactly as it was.
+**Go from nothing to writing Python in one command.** No prior setup, no
+tools to install first, nothing to learn about how Python is packaged.
+Run one line, open a terminal, and start coding. Under the hood it's the
+same fast, modern tooling ([`uv`](https://astral.sh/uv)) — you just never
+have to set it up. And it keeps everything in a single,
+well-organized folder instead of scattering files across your system — so if
+you ever want it gone, one command — `seed purge` — removes it all and leaves
+your computer exactly as it was.
+
+Already fluent in Python? seedling still earns its place. You get the same
+one-line, reproducible install with nothing to configure, and every
+interpreter, virtual environment, and cloned repo stays tidy in one
+predictable location instead of sprawling across your machine. It's also a
+fast way to standardize a team: point it at
+[your own git host or a network share](docs/OFFLINE.md) via
+[`seedling.conf`](seedling.conf), and hand junior or non-technical users a
+fully preconfigured, batteries-included environment they install in a single
+line.
 
 ---
 
-## Why seedling?
-
-Getting started with Python is usually the hard part. You don't just install
-"Python" — you end up juggling **interpreter versions**, per‑project
-**virtual environments** (isolated package sets so one project's libraries
-don't break another's), a package installer, and an editor. The usual tools
-(`pyenv`, `venv`, `pip`, `conda`, …) each solve one piece and each scatter
-files into a different hidden corner of your system.
-
-seedling collapses all of that into a single command — **`seed`** — that puts
-everything in one place and comes with sensible defaults already set up.
+## What seedling installs and manages for you
 
 ```mermaid
 flowchart TB
-    U["You: I just want to write some Python"]
-    U --> Mess["<b>Normally</b><br/>interpreters, venvs, pip, editor config —<br/>scattered across ~/.pyenv, %APPDATA%,<br/>~/.local, ~/.vscode, and more"]
-    U --> Seed["<b>With seedling</b><br/>one command, everything under ~/seedling,<br/>batteries included"]
-    Seed --> Del["Delete ~/seedling → machine is exactly<br/>as it was. Nothing left behind."]
+    U["You just want to write some Python"]
+    U --> Normal["<b>The usual way</b><br/>research, install, and connect several tools —<br/>hours of setup and decisions<br/>before your first line of code"]
+    U --> Seed["<b>With seedling</b><br/>run one command → open a terminal →<br/>you're writing Python"]
 
-    style Mess fill:#3a2020,stroke:#a33,color:#fff
+    style Normal fill:#3a2020,stroke:#a33,color:#fff
     style Seed fill:#1f3a24,stroke:#3a3,color:#fff
-    style Del fill:#1f3a24,stroke:#3a3,color:#fff
 ```
 
-**What you get, all self‑contained:**
+**All handled automatically, so you don't have to think about it:**
 
-- 🐍 Any number of **Python versions**, side by side
-- 📦 **Virtual environments** per project, with common tools pre‑installed
-- 🧰 A portable **VS Code** — editor, settings, and extensions bundled in
-- 🔁 A **git repo** manager for cloning and working on projects
-- 🗒️ Automatic **logs**, a **health check**, and a one‑screen **summary**
-- 🧹 True **reversibility** — nothing touches system folders; deleting one
-  directory undoes it all
+- 🐍 **Python itself** — the newest version, installed and ready (you don't
+  even need Python beforehand)
+- 📦 A **ready-to-use environment** with common tools already in it — just
+  `python` and go
+- 🧰 A portable **VS Code** editor, with Python extensions and settings
+  already configured
+- 🔁 One command to **clone and work on projects** from GitHub
+- 🗒️ Sensible extras handled for you — **logs**, a **health check**, and a
+  one-screen **summary** of everything installed
+- 🧹 Completely **undoable** — nothing touches your system; `seed purge`
+  removes all of it in one command
 
 ---
 
@@ -60,11 +65,12 @@ curl -fsSL https://raw.githubusercontent.com/cryocliff/seedling/main/installers/
 irm https://raw.githubusercontent.com/cryocliff/seedling/main/installers/install.ps1 | iex
 ```
 
-The installer bootstraps everything and leaves you ready to code:
+That one command does the whole setup for you — no follow-up steps, no
+configuration. When it finishes, you're ready to code:
 
 ```mermaid
 flowchart LR
-    I["Run the<br/>one-liner"] --> B["seedling installs uv,<br/>the newest Python, and a<br/>ready-to-use <b>dev</b> venv"]
+    I["Run the<br/>one-liner"] --> B["seedling sets up everything<br/>Python needs, automatically"]
     B --> T["Open a new<br/>terminal"]
     T --> R["<b>python</b> just works<br/><b>seed install pandas</b> adds packages<br/><b>seed vscode</b> opens the editor"]
 
@@ -87,27 +93,38 @@ seed summary              # see everything seedling has installed
 
 ---
 
-## The mental model
+## How it's organized (optional reading)
 
-Everything hangs off one folder. **Base Pythons** are the interpreters you
-install; **venvs** are lightweight, isolated project environments built from a
-base Python. A `dev` venv is created for you and auto‑activates in every new
-terminal, so `python` works immediately.
+You don't need any of this to get started — `python` already works. But if
+you're curious, everything lives under one folder, `~/seedling`. The
+**Python** you install can have multiple isolated **environments** built from
+it (so one project's packages never break another's); a ready-to-use one is
+created for you and activates automatically in every new terminal.
 
-```mermaid
-flowchart TB
-    S["🌱 ~/seedling"]
-    S --> P["<b>Base Pythons</b><br/>seed python 3.12"]
-    S --> E["<b>Portable VS Code</b><br/>seed vscode"]
-    S --> Repo["<b>Cloned repos</b><br/>seed repo-clone a url"]
-    P --> V1["venv: <b>dev</b><br/>auto-activates<br/>in new shells"]
-    P --> V2["venv: myproject<br/>seed venv myproject"]
-    V1 --> Pkg["packages you install<br/>seed install a package"]
-
-    style S fill:#1f3a24,stroke:#3a3,color:#fff
-    style V1 fill:#22304a,stroke:#47a,color:#fff
-    style V2 fill:#22304a,stroke:#47a,color:#fff
 ```
+~/seedling/
+├── system/                 seedling's own runtime
+│   ├── bin/                    uv and the seed-cli shim
+│   ├── tool/                   the venv seed-cli runs in
+│   ├── src/                    seedling's own source copy
+│   ├── config/settings.json    settings (seed config)
+│   ├── logs/                   one log file per day
+│   ├── cache/uv/               uv's download cache
+│   ├── certs/                  CA bundle for org installs
+│   └── shell/                  the seed.sh / seed.ps1 hook
+├── python/
+│   ├── base/312/           seed python 312
+│   └── venvs/myproject/    seed venv myproject
+├── extensions/
+│   └── vscode/
+│       └── app/            portable VS Code (bundled)
+└── repo/
+    └── myrepo/             seed repo-clone <url>
+```
+
+Nothing is written to `%APPDATA%`, `~/.vscode`, `~/.local/share`, or the
+other places tools like this usually scatter files — it's all contained here,
+which is why `seed purge` can remove every trace in one command.
 
 ---
 
