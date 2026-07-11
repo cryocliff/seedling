@@ -72,7 +72,7 @@ configuration. When it finishes, you're ready to code:
 flowchart LR
     I["Run the<br/>one-liner"] --> B["seedling sets up everything<br/>Python needs, automatically"]
     B --> T["Open a new<br/>terminal"]
-    T --> R["<b>python</b> just works<br/><b>seed install pandas</b> adds packages<br/><b>seed vscode</b> opens the editor"]
+    T --> R["<b>python</b> just works<br/><b>seed install requests</b> adds packages<br/><b>seed vscode</b> opens the editor"]
 
     style R fill:#1f3a24,stroke:#3a3,color:#fff
 ```
@@ -81,7 +81,7 @@ Open a new terminal and go:
 
 ```sh
 python                    # newest Python, in the dev venv, ready to go
-seed install pandas       # add packages to the current venv
+seed install requests     # add packages to the current venv
 seed venv myproject       # create another isolated environment
 seed vscode               # open the bundled VS Code
 seed summary              # see everything seedling has installed
