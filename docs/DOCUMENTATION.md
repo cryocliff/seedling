@@ -55,12 +55,25 @@ There are four install origins. Whichever one is used gets recorded as the
 right place afterward — and `seed purge`'s "to reinstall later" message
 matches it too:
 
-| # | Origin | How you install | Recorded as `update_source` | Reinstall later by |
-|---|--------|-----------------|------------------------------|--------------------|
-| 1 | **Public GitHub** | The `curl`/`irm` one-liners below | The public repo URL | The same one-liners |
-| 2 | **Local checkout** | Run `install.cmd` from inside a downloaded/cloned copy of this repo | The checkout's own `origin` remote (or the resolved default) | Running `install.cmd` in a checkout again |
-| 3 | **Directory / network share** | `seedling.conf`'s `SEEDLING_REPO_URL` (or the `SEEDLING_REPO` env var) set to a folder holding a copy of this repo | That directory | Running `install.cmd` on the share again |
-| 4 | **Self-hosted git** | `seedling.conf`'s `SEEDLING_REPO_URL` (or `SEEDLING_REPO`) set to a git URL (GitHub Enterprise, GitLab, a fork...) | That URL | `git clone <url>` + `install.cmd` inside the clone |
+**1. Public GitHub**
+- *Install:* the `curl` / `irm` one-liners below
+- *Recorded as:* the public repo URL
+- *Reinstall:* the same one-liners
+
+**2. Local checkout**
+- *Install:* run `install.cmd` from inside a downloaded/cloned copy of this repo
+- *Recorded as:* the checkout's own `origin` remote (or the resolved default)
+- *Reinstall:* run `install.cmd` from a checkout again
+
+**3. Directory / network share**
+- *Install:* point `seedling.conf`'s `SEEDLING_REPO_URL` (or the `SEEDLING_REPO` env var) at a folder holding a copy of this repo
+- *Recorded as:* that directory
+- *Reinstall:* run `install.cmd` on the share again
+
+**4. Self-hosted git**
+- *Install:* point `SEEDLING_REPO_URL` (or `SEEDLING_REPO`) at a git URL — GitHub Enterprise, GitLab, a fork…
+- *Recorded as:* that URL
+- *Reinstall:* `git clone <url>`, then `install.cmd` inside the clone
 
 Origins 3 and 4 are the organization-deployment story: edit
 [`seedling.conf`](#deployment-configuration-seedlingconf) once in the copy
