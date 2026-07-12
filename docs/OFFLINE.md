@@ -13,28 +13,68 @@ any of this — they run `install.cmd` from the share and everything works.
 
 ## The short version
 
-Everything is driven by **editing [`seedling.conf`](../seedling.conf)** in
-the copy of the repo you distribute — users never set environment
-variables or change anything on their machines. You provide **four
-things** (plus three optional ones):
+Everything is driven by **editing [`seedling.conf`](../seedling.conf)** in the
+copy of the repo you distribute (plus dropping a few binaries in `vendor/`) —
+your users never set environment variables or change anything on their
+machines. Find the scenario that matches your network and set only what it
+lists:
 
-| # | Component | What to provide |
-|---|-----------|-----------------|
-| 1 | seedling's own source | A copy of this repo on a network share (or self-hosted git) — set `SEEDLING_REPO_URL` in `seedling.conf` |
-| 2 | The `uv` binary | Drop it in `vendor/uv/` inside your repo copy — the installer places it automatically |
-| 3 | Python interpreters | An internal mirror (or share folder) of `python-build-standalone` archives — set `SEEDLING_PYTHON_MIRROR` in `seedling.conf` |
-| 4 | Python packages | An internal index (Artifactory / Nexus / devpi) or a plain directory of wheels — set `SEEDLING_PACKAGE_INDEX` in `seedling.conf`; must include `hatchling` |
-| 5 | git *(optional)* | Drop MinGit in `vendor/git/`, or deploy git through your normal software channel |
-| 6 | VS Code *(optional)* | Drop a pre-seeded portable install in `vendor/vscode/` |
-| 7 | CA certificates *(optional)* | Drop your corporate CA's `.pem`/`.crt` files in `vendor/certs/` — bundled and trusted automatically |
+**You have a self-hosted git server and internal mirrors** — GitHub
+Enterprise / GitLab, plus Artifactory / Nexus / devpi:
 
-The conf values are recorded in seedling's settings at install time and
-applied automatically to every command from then on (visible and
-changeable later via `seed config`).
+| Set | To |
+|---|---|
+| `SEEDLING_REPO_URL` | your seedling repo's git URL |
+| `SEEDLING_PYTHON_MIRROR` | your `python-build-standalone` mirror |
+| `SEEDLING_PACKAGE_INDEX` | your internal package index (must also serve `hatchling`, used to build seed-cli) |
+| `vendor/uv/` | the `uv` binary (it won't be on your package index) |
 
-Everything in seedling that *isn't* a download — venvs, activation, config,
-logging, previews, removal commands, directory-based updates — already
-works with zero network access.
+**You have only a shared network drive** — no git server, no internal index,
+just a file share everyone can read:
+
+| Set | To |
+|---|---|
+| `SEEDLING_REPO_URL` | a **folder** on the share holding a copy of this repo |
+| `SEEDLING_PYTHON_MIRROR` | a **folder** of `python-build-standalone` archives |
+| `SEEDLING_PACKAGE_INDEX` | a **folder** of wheels (must include `hatchling`) |
+| `vendor/uv/` | the `uv` binary |
+| `vendor/git/` | MinGit — Windows only, if there's no system git |
+
+Full walkthrough: [Variant: nothing but a shared drive](#variant-nothing-but-a-shared-drive).
+
+**You have internet, but pip/interpreter downloads are blocked or must stay
+internal** — only the package (and maybe Python) sources are restricted:
+
+| Set | To |
+|---|---|
+| `SEEDLING_REPO_URL` | leave unset — installs from public GitHub |
+| `SEEDLING_PACKAGE_INDEX` | your internal index or wheels folder |
+| `SEEDLING_PYTHON_MIRROR` | only if interpreter downloads are blocked too |
+
+**Your network re-signs HTTPS with a corporate CA** — a TLS-inspecting proxy
+(can combine with any scenario above):
+
+| Set | To |
+|---|---|
+| `SEEDLING_NATIVE_TLS=true` | trust the OS certificate store — **or** — |
+| `vendor/certs/` | your CA's `.pem`/`.crt` files (bundled and trusted automatically) |
+
+Details: [HTTPS and corporate certificate authorities](#https-and-corporate-certificate-authorities).
+
+**Optional in any scenario** — via the [`vendor/` convention](#the-vendor-convention):
+
+| Set | To |
+|---|---|
+| `vendor/vscode/` | a pre-seeded portable VS Code (ships the editor offline) |
+| `vendor/git/` | MinGit — git on Windows with no system install |
+
+The conf values are recorded in seedling's settings at install time and applied
+automatically to every command afterward (view or change them later with `seed
+config`). Everything that *isn't* a download — venvs, activation, config,
+logging, previews, removal, directory-based updates — already works with zero
+network access. The [component-by-component reference](#what-seedling-downloads-and-when)
+below backs each scenario, and [Putting it together](#putting-it-together-preparing-the-share)
+is a start-to-finish walkthrough.
 
 ---
 

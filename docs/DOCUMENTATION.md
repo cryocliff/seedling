@@ -50,35 +50,42 @@ auto-bootstrapped portable copy on Windows; see
 
 ### The four ways to install
 
-There are four install origins. Whichever one is used gets recorded as the
-`update_source` setting, so `seed update-commands` keeps fetching from the
-right place afterward — and `seed purge`'s "to reinstall later" message
-matches it too:
+There are four install origins. Whichever one you use is saved as the
+`update_source` setting, so `seed update-commands` (and `seed purge`'s
+"reinstall later" hint) keeps pointing back at it. **The thing that differs
+between them is what you configure up front** — origins 1 and 2 need nothing;
+origins 3 and 4 are set once in
+[`seedling.conf`](#deployment-configuration-seedlingconf) so your users don't
+have to.
 
-**1. Public GitHub**
-- *Install:* the `curl` / `irm` one-liners below
-- *Recorded as:* the public repo URL
-- *Reinstall:* the same one-liners
+**1. Public GitHub** — the default, for anyone on the open internet
+- *Configure:* nothing.
+- *Install:* the `curl` / `irm` one-liners → see [One-line install](#one-line-install).
+- *Recorded as:* the public repo URL.
 
-**2. Local checkout**
-- *Install:* run `install.cmd` from inside a downloaded/cloned copy of this repo
-- *Recorded as:* the checkout's own `origin` remote (or the resolved default)
-- *Reinstall:* run `install.cmd` from a checkout again
+**2. Local checkout** — install from a copy of this repo you already have
+- *Configure:* nothing.
+- *Install:* run `install.cmd` from inside the repo folder → see [Local checkout install](#local-checkout-install).
+- *Recorded as:* the checkout's own `origin` remote (or the resolved default URL).
 
-**3. Directory / network share**
-- *Install:* point `seedling.conf`'s `SEEDLING_REPO_URL` (or the `SEEDLING_REPO` env var) at a folder holding a copy of this repo
-- *Recorded as:* that directory
-- *Reinstall:* run `install.cmd` on the share again
+**3. Directory / network share** — for machines with no GitHub access at all
+- *Configure:* set `SEEDLING_REPO_URL` to a **folder** holding a copy of this repo, in [`seedling.conf`](#deployment-configuration-seedlingconf).
+- *Install:* run `install.cmd`; your users pass no flags of their own.
+- *Recorded as:* that directory.
+- *More:* [Deployment configuration](#deployment-configuration-seedlingconf) — and, for a fully disconnected network, the [offline guide](OFFLINE.md).
 
-**4. Self-hosted git**
-- *Install:* point `SEEDLING_REPO_URL` (or `SEEDLING_REPO`) at a git URL — GitHub Enterprise, GitLab, a fork…
-- *Recorded as:* that URL
-- *Reinstall:* `git clone <url>`, then `install.cmd` inside the clone
+**4. Self-hosted git** — a private GitHub Enterprise / GitLab / fork URL
+- *Configure:* set `SEEDLING_REPO_URL` to the **git URL**, in [`seedling.conf`](#deployment-configuration-seedlingconf).
+- *Install:* run `install.cmd` (or the one-liner with `SEEDLING_REPO` set).
+- *Recorded as:* that URL.
+- *More:* [Deployment configuration](#deployment-configuration-seedlingconf).
 
-Origins 3 and 4 are the organization-deployment story: edit
-[`seedling.conf`](#deployment-configuration-seedlingconf) once in the copy
-you distribute, and users install with no flags at all. The sections below
-cover each mechanism in detail.
+Origins 3 and 4 are the organization-deployment story: set the source **once**
+in the [`seedling.conf`](#deployment-configuration-seedlingconf) you
+distribute, and everyone installs with no flags or environment variables at
+all. To install from a different source for a **single run** without editing
+anything, set the `SEEDLING_REPO` environment variable instead — see
+[Installing from a different source, for one run](#installing-from-a-different-source-for-one-run).
 
 ### One-line install
 
