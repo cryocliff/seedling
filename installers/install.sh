@@ -244,25 +244,27 @@ fi
 # to pull with -- updating re-downloads from this source instead):
 #   - directory install  -> that directory
 #   - cloned from a URL  -> that URL
-#   - local checkout     -> the checkout's own origin remote if it has one,
-#                           else whatever URL the conf/default resolved to
+#   - local checkout     -> the checkout DIRECTORY itself, so updates re-copy
+#                           from that working tree (local edits, or a
+#                           `git pull` there, reach the install)
 UPDATE_SOURCE_SEED=""
 if [ -n "$INSTALLED_FROM_DIR" ]; then
     UPDATE_SOURCE_SEED="$INSTALLED_FROM_DIR"
 elif [ "$CLONE_MODE" = "1" ]; then
     UPDATE_SOURCE_SEED="$SEEDLING_REPO"
 else
-    # Local checkout. An explicit env var or an org-edited conf states
-    # intent and wins; otherwise use the checkout's own origin remote;
-    # otherwise fall back to the resolved (default) URL.
+    # Local checkout. An explicit env var or an org-edited conf states intent
+    # and wins; otherwise update straight from the checkout directory this was
+    # installed from -- re-copying its working tree -- which is what a
+    # developer iterating on the commands wants (consistent with the
+    # directory-install case above).
     if [ -n "$SEEDLING_REPO_FROM_ENV" ]; then
         UPDATE_SOURCE_SEED="$SEEDLING_REPO"
     elif [ -n "$SEEDLING_REPO_URL" ] && [ "$SEEDLING_REPO_URL" != "$DEFAULT_SEEDLING_REPO" ]; then
         UPDATE_SOURCE_SEED="$SEEDLING_REPO_URL"
-    elif command -v git >/dev/null 2>&1 && [ -d "$REPO_ROOT/.git" ]; then
-        UPDATE_SOURCE_SEED="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
+    else
+        UPDATE_SOURCE_SEED="$REPO_ROOT"
     fi
-    [ -n "$UPDATE_SOURCE_SEED" ] || UPDATE_SOURCE_SEED="$SEEDLING_REPO"
 fi
 
 SETTINGS_FILE="$SEEDLING_HOME/system/config/settings.json"

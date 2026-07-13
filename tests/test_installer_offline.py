@@ -82,16 +82,23 @@ class TestDefaultInstall:
         # proves the strip ran).
         assert "\x1b[" not in text
 
-    def test_pristine_conf_is_a_no_op_plus_recorded_origin(self, install_env):
+    def test_pristine_conf_records_local_checkout_dir(self, install_env):
         copy, fake_home, home, run_install = install_env
         result = run_install("SEEDLING_AUTO_SETUP=false")
         assert result.returncode == 0, result.stdout + result.stderr
         # source copied, minus .git and vendor
         assert (home / "system" / "src" / "src" / "pyproject.toml").exists()
         assert not (home / "system" / "src" / ".git").exists()
-        # only the install origin is seeded; every other pristine value is a no-op
+        # only update_source is seeded; every other pristine value is a no-op
         settings = _settings(home)
         assert set(settings) == {"update_source"}
+        # Installed from a local checkout with no override -> update_source is
+        # the checkout DIRECTORY, not the public URL, so `seed update-commands`
+        # re-copies from that working tree (the developer-iteration path).
+        # (bash `pwd` may render it MSYS-style /c/... on Windows -- compare by
+        # trailing dir name, which survives that.)
+        assert settings["update_source"] != PUBLIC_URL
+        assert settings["update_source"].replace("\\", "/").rstrip("/").endswith("/copy")
         # hook written and registered
         assert "seedling" in (fake_home / ".bashrc").read_text()
         assert (home / "system" / "shell" / "seed.sh").exists()

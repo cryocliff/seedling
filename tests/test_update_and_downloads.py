@@ -104,6 +104,53 @@ def test_url_update_falls_back_when_clone_fails(run_cli, home, src_installed, tm
     assert calls, "reinstall should still run"
 
 
+@needs_git
+def test_url_update_from_branch_clones_that_branch(run_cli, home, src_installed, tmp_path):
+    """--from-branch clones the named branch instead of the remote default."""
+    src, calls = src_installed
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    # default branch `main` carries different content than the `feature` branch,
+    # so landing feature's content proves the branch selection took effect.
+    _make_source_tree(upstream, "on-main")
+    subprocess.run([GIT, "init", "-q", "-b", "main", str(upstream)], check=True)
+    subprocess.run([GIT, "-C", str(upstream), "add", "-A", "-f"], check=True)
+    subprocess.run([GIT, "-C", str(upstream), "-c", "user.email=t@t",
+                    "-c", "user.name=t", "commit", "-qm", "main"], check=True)
+    subprocess.run([GIT, "-C", str(upstream), "checkout", "-q", "-b", "feature"], check=True)
+    (upstream / "MARKER.txt").write_text("on-feature")
+    subprocess.run([GIT, "-C", str(upstream), "-c", "user.email=t@t",
+                    "-c", "user.name=t", "commit", "-qam", "feature"], check=True)
+    subprocess.run([GIT, "-C", str(upstream), "checkout", "-q", "main"], check=True)
+
+    config.set_value("update_source", "file:///" + str(upstream).replace("\\", "/"))
+
+    code, out = run_cli("update-commands", "--from-branch", "feature")
+    assert code == 0
+    assert (src / "MARKER.txt").read_text() == "on-feature"
+    assert "branch feature" in out
+
+
+def test_from_branch_ignored_for_directory_source(run_cli, home, src_installed, tmp_path):
+    src, calls = src_installed
+    upstream = tmp_path / "share"
+    upstream.mkdir()
+    _make_source_tree(upstream, "v2")
+    config.set_value("update_source", str(upstream))
+    code, out = run_cli("update-commands", "--from-branch", "feature")
+    assert code == 0
+    assert "--from-branch is ignored" in out
+    assert (src / "MARKER.txt").read_text() == "v2"  # still updated from the dir
+
+
+def test_from_branch_ignored_when_no_source(run_cli, home, src_installed):
+    src, calls = src_installed
+    code, out = run_cli("update-commands", "--from-branch", "feature")
+    assert code == 0
+    assert "--from-branch is ignored" in out
+    assert "No update source is recorded" in out
+
+
 # --- self-update: rename-aside so a running seed-cli can be replaced ---------
 # On Windows, `uv tool install --force --reinstall` must delete the tool venv
 # whose python.exe IS the running seed-cli -- deletion of a running exe fails

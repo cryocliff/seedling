@@ -314,8 +314,10 @@ if ($Conf.Count -eq 0) {
 #   - directory install  -> that directory
 #   - cloned from a URL  -> that URL
 #   - local checkout     -> env var / org-edited conf if given, else the
-#                           checkout's own origin remote, else the
-#                           resolved (default) URL
+#                           checkout DIRECTORY itself, so updates re-copy from
+#                           that working tree (a developer's local edits, or a
+#                           `git pull` there, reach the install via
+#                           `seed update-commands`)
 $UpdateSourceSeed = $null
 if ($InstalledFromDir) {
     $UpdateSourceSeed = $InstalledFromDir
@@ -326,12 +328,14 @@ if ($InstalledFromDir) {
         $UpdateSourceSeed = $SeedlingRepo
     } elseif ($Conf["SEEDLING_REPO_URL"] -and $Conf["SEEDLING_REPO_URL"] -ne $DefaultSeedlingRepo) {
         $UpdateSourceSeed = $Conf["SEEDLING_REPO_URL"]
-    } elseif ((Test-Path (Join-Path $RepoRoot ".git")) -and (Get-Command git -ErrorAction SilentlyContinue)) {
-        # try/catch because under $ErrorActionPreference = "Stop", git
-        # writing to stderr (e.g. no origin remote) would abort the install.
-        $UpdateSourceSeed = try { git -C $RepoRoot remote get-url origin 2>$null | Select-Object -First 1 } catch { $null }
+    } else {
+        # No explicit override: update straight from the checkout this was
+        # installed from -- installing from a repo directory means updating
+        # from that same directory (consistent with the directory-install
+        # case above), which is what a developer iterating on the commands
+        # wants. `git pull` there, then `seed update-commands`, to test edits.
+        $UpdateSourceSeed = $RepoRoot
     }
-    if (-not $UpdateSourceSeed) { $UpdateSourceSeed = $SeedlingRepo }
 }
 
 $SettingsFile = Join-Path $SeedlingHome "system\config\settings.json"

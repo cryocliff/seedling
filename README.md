@@ -125,6 +125,7 @@ Command names read predictably: a bare noun is the action (`python` installs,
 | `seed venv <name>` | Create an isolated environment |
 | `seed activate <name>` | Activate a venv in your current shell |
 | `seed install <pkg...>` | Add packages to the active venv |
+| `seed download-whl <pkg...>` | Download a package + its deps as wheels for an offline install |
 | `seed vscode` | Open the bundled, portable VS Code |
 | `seed repo-clone <url>` | Clone a git repo into `~/seedling/repo` |
 | `seed summary` | One screen of everything installed |

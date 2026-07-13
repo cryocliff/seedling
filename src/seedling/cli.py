@@ -11,6 +11,7 @@ from .commands import (
     config_cmd,
     deactivate_cmd,
     default_venv_cmd,
+    download_cmd,
     install_cmd,
     kill_cmd,
     list_cmd,
@@ -55,6 +56,10 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("uninstall", "<package...>", "Uninstall packages (uv pip uninstall)"),
         ("package-list", "", "List installed packages (uv pip list)"),
     ]),
+    ("Offline utilities -- download wheels to carry to an air-gapped machine", [
+        ("download-whl", "<package...>", "Download a package + its deps as wheels"),
+        ("download-requirements", "<req.txt>", "Download a requirements file's wheels"),
+    ]),
     ("Git repos", [
         ("repo-clone", "<git-url>", "Clone a repo into ~/seedling/repo"),
         ("repo-list", "", "List cloned repos"),
@@ -69,7 +74,7 @@ _HELP_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Utilities", [
         ("config", "[get|set|unset]", "View or change seedling settings"),
         ("kill-processes", "<all|name>", "Force-close python/VS Code (or named) processes"),
-        ("update-commands", "", "Update the seed CLI itself"),
+        ("update-commands", "[--from-branch B]", "Update the seed CLI itself"),
     ]),
     ("Danger zone -- these delete things (all support --preview)", [
         ("remove-repo", "<name>", "Delete a cloned repo"),
@@ -201,6 +206,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_list_packages.add_argument("extra", nargs=argparse.REMAINDER,
                                   help="Anything after this is passed straight to `uv pip list`")
 
+    p_dl_whl = sub.add_parser(
+        "download-whl",
+        help="Download a package and all its dependencies as wheels for an offline install")
+    p_dl_whl.add_argument(
+        "args", nargs=argparse.REMAINDER,
+        help="<package...> plus any `pip download` flags (e.g. --platform, "
+             "--python-version, --only-binary=:all:, --dest). Wheels land in "
+             "./wheelhouse unless you pass your own --dest.")
+
+    p_dl_req = sub.add_parser(
+        "download-requirements",
+        help="Download every package in a requirements file (+deps) as wheels for an offline install")
+    p_dl_req.add_argument(
+        "args", nargs=argparse.REMAINDER,
+        help="<requirements.txt> plus any `pip download` flags. Wheels land "
+             "in ./wheelhouse unless you pass your own --dest.")
+
     p_vscode = sub.add_parser("vscode", help="Install (if needed) and open VS Code")
     p_vscode.add_argument("path", nargs="?", help="Path to open (defaults to cwd)")
     p_vscode.add_argument("--reinstall", action="store_true",
@@ -266,8 +288,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_kill.add_argument("target", nargs="?",
                          help="'all' for python/VS Code processes, or a specific process name")
 
-    sub.add_parser("update-commands",
+    p_update = sub.add_parser("update-commands",
                     help="Update the seed CLI itself from its source in ~/seedling/system/src")
+    p_update.add_argument(
+        "--from-branch", dest="from_branch", metavar="BRANCH", default=None,
+        help="When update_source is a git URL, clone this branch (or tag) "
+             "instead of the remote's default branch. Ignored for "
+             "directory/share update sources.")
 
     sub.add_parser("where", help="Print the seedling home directory")
 
@@ -386,6 +413,8 @@ def _dispatch_main(argv: list[str]) -> int:
         "install": install_cmd.run,
         "uninstall": uninstall_cmd.run,
         "package-list": list_cmd.list_packages,
+        "download-whl": download_cmd.run_whl,
+        "download-requirements": download_cmd.run_requirements,
         "vscode": vscode_cmd.run,
         "repo-clone": repo_cmd.clone,
         "repo-list": repo_cmd.list_repos,

@@ -196,6 +196,37 @@ command. The index/directory must contain at minimum:
   instead.
 - Whatever your users actually `seed install`.
 
+### Populating a wheel directory
+
+seedling ships the builder for this folder so you don't need a separate pip
+setup on the connected machine. From a machine with internet (or reach to your
+internal index):
+
+```
+seed download-whl hatchling ipython ruff ipykernel pip pandas
+```
+
+downloads each package **and every transitive dependency** as wheels into
+`./wheelhouse`. Feed a list you already maintain with
+`seed download-requirements requirements.txt` instead. Copy the resulting
+folder to the share and set `SEEDLING_PACKAGE_INDEX` (or `seed config set
+package_index`) to it.
+
+Two things to keep in mind for a share-only deployment:
+
+- **Match the target platform.** Wheels default to the platform you run the
+  command on. If the connected machine differs from the fleet, build for the
+  target explicitly — every `pip download` flag passes through:
+  `seed download-whl pandas --only-binary=:all: --platform win_amd64
+  --python-version 312`.
+- **A missing transitive dependency fails resolution outright** offline (the
+  internet index is disabled), so build the wheel set from a clean list and
+  test it by creating a venv on a disconnected machine.
+
+If you already have an internal index URL configured, `download-whl` uses it
+automatically (as `--index-url`) — handy for staging a share from an
+Artifactory/Nexus mirror.
+
 ---
 
 ## 5. git (optional)
@@ -320,7 +351,7 @@ equivalent:
 |---|---|
 | seedling source + updates | Already file-based (#1) — the ideal case |
 | Python interpreter mirror | `SEEDLING_PYTHON_MIRROR="S:\tools\python-builds"` — a share folder of archives; seedling handles the `file://` conversion |
-| Package index | `SEEDLING_PACKAGE_INDEX="S:\tools\wheels"` — a **directory of wheels** on the share; the internet index is disabled automatically. Populate it on a connected machine with `pip download -d` (include `hatchling`, the default venv packages, and all transitive deps for your platform) |
+| Package index | `SEEDLING_PACKAGE_INDEX="S:\tools\wheels"` — a **directory of wheels** on the share; the internet index is disabled automatically. Populate it on a connected machine with [`seed download-whl`](#populating-a-wheel-directory) (include `hatchling`, the default venv packages, and all transitive deps for your platform) |
 | git hosting | git needs no server: **bare repositories on the share** (`git init --bare S:/repos/project.git`) are full remotes — `seed repo-clone S:/repos/project.git`, push, and pull all work over git's file protocol |
 | VS Code | Pre-seeded portable folder in `vendor/vscode/`, as above (#6) |
 

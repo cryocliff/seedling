@@ -66,7 +66,7 @@ have to.
 **2. Local checkout** — install from a copy of this repo you already have
 - *Configure:* nothing.
 - *Install:* run `install.cmd` from inside the repo folder → see [Local checkout install](#local-checkout-install).
-- *Recorded as:* the checkout's own `origin` remote (or the resolved default URL).
+- *Recorded as:* the checkout **directory** itself, so `seed update-commands` re-copies from that working tree. Edit the source (or `git pull`) there, run `seed update-commands`, and your changes go live — the developer-iteration loop. (An explicit `SEEDLING_REPO`/`SEEDLING_REPO_URL` override still wins if you want updates to come from a URL instead.)
 
 **3. Directory / network share** — for machines with no GitHub access at all
 - *Configure:* set `SEEDLING_REPO_URL` to a **folder** holding a copy of this repo, in [`seedling.conf`](#deployment-configuration-seedlingconf).
@@ -107,6 +107,11 @@ the installer from inside it:
 
 - **macOS/Linux:** `sh ./install.cmd` (or `installers/install.sh` directly)
 - **Windows:** `install.cmd` (double-clicking it also works)
+
+This records the checkout directory as `update_source`, so later
+`seed update-commands` re-copies from that same checkout — edit the source (or
+`git pull`) there and update to test your changes. See
+[The update model](#the-update-model).
 
 ### Deployment configuration: `seedling.conf`
 
@@ -505,6 +510,7 @@ destructive action reads the same way (`remove-venv`, `remove-python`,
 |---|---|
 | Python interpreters *(structural — the base installs venvs are built from)* | `python [ver]` *(install)*, `python-list`, `remove-python` |
 | Venvs & packages *(day-to-day environment work)* | `venv <name>` *(create)*, `venv-list`, `activate`, `deactivate`, `venv-default`, `install`, `uninstall`, `package-list`, `remove-venv`, `remove-venv-all` |
+| Offline utilities *(build a wheel set for an air-gapped machine)* | `download-whl <package...>`, `download-requirements <req.txt>` |
 | Repos | `repo-clone`, `repo-list`, `repo-cd`, `repo-vscode`, `repo-open`, `repo-install`, `remove-repo` |
 | Everyday / singletons | `vscode`, `summary`, `health-check`, `logs-viewer`, `config`, `where`, `kill-processes`, `update-commands`, `remove-user`, `purge`, `purge-and-reinstall` |
 
@@ -697,6 +703,47 @@ Package            Version
 certifi            2026.6.17
 requests           2.34.2
 urllib3            2.7.0
+```
+
+### `seed download-whl <package...>`
+
+Downloads a package **and all of its dependencies** as `.whl` files (plus any
+source archives) into a flat folder — the offline-bundle builder. Run it on a
+connected machine, carry the folder to an air-gapped one, and point
+`package_index` at it:
+
+```
+seed download-whl pandas
+# ... copy ./wheelhouse to the offline machine or a share ...
+seed config set package_index /path/to/wheelhouse
+seed install pandas
+```
+
+Wheels land in `./wheelhouse` unless you pass your own `--dest`. Under the hood
+it runs `uvx pip download` (uv has no `pip download` of its own, so `pip` runs
+as an ephemeral uv tool — nothing is installed permanently), so **every
+`pip download` flag passes straight through**. That makes cross-platform
+bundles easy — build wheels for a machine you're not sitting at:
+
+```
+seed download-whl numpy --only-binary=:all: \
+    --platform manylinux2014_x86_64 --python-version 312 --dest ./linux-wheels
+```
+
+If `package_index` (an Artifactory/Nexus/devpi URL, or a wheels directory) or
+`ca_cert` are configured, they're applied automatically as `--index-url` /
+`--find-links --no-index` / `--cert`, so a bundle can itself be built from an
+internal index without setting any environment variables.
+
+### `seed download-requirements <requirements.txt>`
+
+Same as `download-whl`, but reads package specifiers from a `requirements.txt`
+(forwarded to `pip download -r`). Everything else — default `./wheelhouse`
+destination, flag passthrough, `package_index`/`ca_cert` handling — is identical.
+
+```
+seed download-requirements requirements.txt
+seed download-requirements requirements.txt --dest ./bundle --python-version 311
 ```
 
 ### `seed remove-venv <name> [-y]`
@@ -934,9 +981,12 @@ explanation. In short:
 - If the `update_source` setting holds a git URL, downloads a fresh
   shallow clone of it into a temp folder, swaps it in as the new
   `~/seedling/system/src` (minus its `.git`), then reinstalls via
-  `uv tool install --force --reinstall`.
+  `uv tool install --force --reinstall`. Pass **`--from-branch <branch>`**
+  to clone a specific branch or tag instead of the remote's default branch
+  — useful for tracking a `dev`/`staging` line or pinning a release tag.
 - If `update_source` holds a directory path, re-copies from it instead
-  (same swap, same reinstall).
+  (same swap, same reinstall). `--from-branch` doesn't apply here (a
+  directory has no branches) and is ignored with a note.
 - If no source is recorded, it just reinstalls from whatever is currently
   in `~/seedling/system/src`, which doubles as a repair command if you've
   hand-edited something there. A failed download also falls back to this,
@@ -958,6 +1008,7 @@ copies are renamed back, so a failed update always leaves a working `seed`.
 
 ```
 seed update-commands
+seed update-commands --from-branch dev     # track a branch (git-URL sources)
 ```
 
 ### `seed remove-user [-y]`
@@ -1057,10 +1108,10 @@ function, an existing install must have picked up this version first (run
 `seed update-commands` once); a brand-new command needs the updated `seed`
 either way. Open a new terminal afterward to pick up the fresh environment.
 
-If **no `update_source` is recorded** (possible for a local-checkout install
-with no git remote), it asks whether to reinstall from the public repo
-(`github.com/cryocliff/seedling`) and aborts *without deleting anything* if
-you decline — set a source first with
+If **no `update_source` is recorded** (uncommon — every install origin records
+one; mainly if you cleared it with `seed config unset update_source`), it asks
+whether to reinstall from the public repo (`github.com/cryocliff/seedling`) and
+aborts *without deleting anything* if you decline — set a source first with
 `seed config set update_source <git-url-or-directory>`.
 
 Reinstalling has exactly the same requirements as a first-time install from
@@ -1323,6 +1374,14 @@ The installers accept the same flexibility up front: `SEEDLING_REPO` may
 be a git URL *or* a directory containing a copy of this repo. When it's a
 directory, the installer copies from it and records it as `update_source`
 automatically, so machines on networks without github.com stay updatable.
+
+Installing from a **local checkout** (running the installer from inside the
+repo) records that checkout directory as `update_source` for the same reason —
+so `seed update-commands` re-copies from your working tree. That closes the
+loop for anyone **developing seedling itself**: edit the source in your
+checkout (or `git pull`), run `seed update-commands`, and the change is live in
+your install, no reinstall needed. (Set `SEEDLING_REPO`/`SEEDLING_REPO_URL` to
+a URL at install time if you'd rather updates re-clone from a remote instead.)
 
 ---
 

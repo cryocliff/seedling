@@ -16,6 +16,7 @@ ALL_COMMANDS = [
     "python", "python-list", "remove-python",
     "venv", "venv-list", "remove-venv", "remove-venv-all", "venv-default",
     "activate", "deactivate", "install", "uninstall", "package-list",
+    "download-whl", "download-requirements",
     "repo-clone", "repo-list", "repo-cd", "repo-vscode", "repo-open",
     "repo-install", "remove-repo",
     "vscode", "summary", "health-check", "logs-viewer", "config", "where",

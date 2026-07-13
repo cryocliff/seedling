@@ -8,7 +8,8 @@ cloned from, or the directory it was copied from. That copy never changes
 on its own. This command updates by RE-FETCHING from the recorded source:
 
   - git URL          -> fresh `git clone --depth 1` into a temp folder,
-                        then swap it in (minus .git)
+                        then swap it in (minus .git); `--from-branch <b>`
+                        clones that branch/tag instead of the default one
   - directory path   -> re-copy from that directory (minus .git)
   - nothing recorded -> reinstall the local copy as-is, which doubles as a
                         "repair" command for hand-edited sources
@@ -62,10 +63,11 @@ def _refresh_from_directory(src: Path, source_dir: Path) -> bool:
     return _swap_in(src, tmp)
 
 
-def _refresh_from_url(src: Path, url: str) -> bool:
+def _refresh_from_url(src: Path, url: str, branch: str | None = None) -> bool:
     """Replace ~/seedling/system/src with a fresh shallow clone of `url`.
-    Never fatal: a failed download leaves the current copy in place, and
-    the reinstall below still runs against it."""
+    `branch` (from --from-branch) clones that branch or tag instead of the
+    remote's default branch. Never fatal: a failed download leaves the current
+    copy in place, and the reinstall below still runs against it."""
     try:
         git = git_tool.ensure_git()
     except git_tool.GitNotFound as e:
@@ -73,10 +75,15 @@ def _refresh_from_url(src: Path, url: str) -> bool:
               "Reinstalling from the current local copy instead.")
         return True
 
-    print(f"Downloading the latest seedling from {url} ...")
+    clone = [git, "clone", "--depth", "1"]
+    if branch:
+        clone += ["--branch", branch]
+        print(f"Downloading the latest seedling from {url} (branch {branch}) ...")
+    else:
+        print(f"Downloading the latest seedling from {url} ...")
     tmp = src.parent / (src.name + ".new")
     fsutil.robust_rmtree(tmp)
-    returncode = git_tool.run_streamed([git, "clone", "--depth", "1", url, str(tmp)])
+    returncode = git_tool.run_streamed([*clone, url, str(tmp)])
     if returncode != 0:
         print("Download failed; reinstalling from the current local copy instead.")
         fsutil.robust_rmtree(tmp)
@@ -153,17 +160,26 @@ def run(args) -> int:
               "macOS/Linux) to set it up.")
         return 1
 
+    branch = getattr(args, "from_branch", None)
     update_source = config.get("update_source")
 
     if update_source:
         source_dir = Path(str(update_source)).expanduser()
         if source_dir.is_dir():
+            if branch:
+                print(colors.warn(
+                    f"note: --from-branch is ignored -- update_source "
+                    f"({source_dir}) is a directory, not a git URL."))
             if not _refresh_from_directory(src, source_dir):
                 return 1
         else:
-            if not _refresh_from_url(src, str(update_source)):
+            if not _refresh_from_url(src, str(update_source), branch=branch):
                 return 1
     else:
+        if branch:
+            print(colors.warn(
+                "note: --from-branch is ignored -- no update_source git URL "
+                "is recorded to clone a branch from."))
         print("No update source is recorded, so there's nowhere to fetch a "
               "newer version from; reinstalling from the current local copy "
               "(this still picks up any changes made there by hand).")
