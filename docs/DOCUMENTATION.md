@@ -28,8 +28,7 @@ For a shorter quickstart, see the
 - [The update model](#the-update-model)
 - [Uninstalling](#uninstalling)
 - [Troubleshooting](#troubleshooting)
-- [Source layout (for contributors)](#source-layout-for-contributors)
-- [Running the tests](#running-the-tests)
+- [Contributing](#contributing) — working on seedling itself -> see [CONTRIBUTING.md](CONTRIBUTING.md)
 - [Known limits](#known-limits)
 
 ---
@@ -66,7 +65,7 @@ have to.
 **2. Local checkout** — install from a copy of this repo you already have
 - *Configure:* nothing.
 - *Install:* run `install.cmd` from inside the repo folder → see [Local checkout install](#local-checkout-install).
-- *Recorded as:* the checkout **directory** itself, so `seed update-commands` re-copies from that working tree. Edit the source (or `git pull`) there, run `seed update-commands`, and your changes go live — the developer-iteration loop. (An explicit `SEEDLING_REPO`/`SEEDLING_REPO_URL` override still wins if you want updates to come from a URL instead.)
+- *Recorded as:* the checkout **directory** itself, so `seed update-commands` re-copies from that working tree. (An explicit `SEEDLING_REPO`/`SEEDLING_REPO_URL` override records a URL instead.) Developing seedling? The [contributor guide](CONTRIBUTING.md) builds the edit → update loop on this.
 
 **3. Directory / network share** — for machines with no GitHub access at all
 - *Configure:* set `SEEDLING_REPO_URL` to a **folder** holding a copy of this repo, in [`seedling.conf`](#deployment-configuration-seedlingconf).
@@ -109,9 +108,9 @@ the installer from inside it:
 - **Windows:** `install.cmd` (double-clicking it also works)
 
 This records the checkout directory as `update_source`, so later
-`seed update-commands` re-copies from that same checkout — edit the source (or
-`git pull`) there and update to test your changes. See
-[The update model](#the-update-model).
+`seed update-commands` re-copies from that same checkout. Developing seedling
+itself? The **[contributor guide](CONTRIBUTING.md)** covers the
+edit → update loop; see also [The update model](#the-update-model).
 
 ### Deployment configuration: `seedling.conf`
 
@@ -1376,12 +1375,11 @@ directory, the installer copies from it and records it as `update_source`
 automatically, so machines on networks without github.com stay updatable.
 
 Installing from a **local checkout** (running the installer from inside the
-repo) records that checkout directory as `update_source` for the same reason —
-so `seed update-commands` re-copies from your working tree. That closes the
-loop for anyone **developing seedling itself**: edit the source in your
-checkout (or `git pull`), run `seed update-commands`, and the change is live in
-your install, no reinstall needed. (Set `SEEDLING_REPO`/`SEEDLING_REPO_URL` to
-a URL at install time if you'd rather updates re-clone from a remote instead.)
+repo) records that checkout directory as `update_source`, so
+`seed update-commands` re-copies from your working tree — the basis of the
+edit → update loop for anyone **developing seedling itself**, covered in the
+[contributor guide](CONTRIBUTING.md). (Set `SEEDLING_REPO`/`SEEDLING_REPO_URL`
+to a URL at install time to re-clone from a remote instead.)
 
 ---
 
@@ -1480,63 +1478,12 @@ into.
 
 ---
 
-## Source layout (for contributors)
+## Contributing
 
-```
-README.md
-seedling.conf         deployment config: install/update source URL (or directory) + install-time settings
-install.cmd           generic installer entry point: batch on Windows, `sh ./install.cmd` on macOS/Linux
-uninstall.cmd         generic uninstaller entry point (same dual-platform trick)
-installers/
-  install.sh          the real POSIX installer (also what the curl one-liner runs)
-  install.ps1         the real Windows installer (also what the irm one-liner runs)
-  uninstall.sh / uninstall.ps1   full removal, including the shell hook (same end state as `seed purge`)
-docs/
-  DOCUMENTATION.md    the full documentation (this file)
-  OFFLINE.md          fully-offline / air-gapped deployment guide
-tests/
-  conftest.py         sandbox fixtures (throwaway home, stub uv, env isolation)
-  test_*.py           unit + CLI + offline/installer/shell-template integration tests
-src/
-  pyproject.toml      the python package definition (`uv tool install` targets this folder)
-  seedling/
-    cli.py            argparse dispatcher
-    paths.py          single source of truth for the ~/seedling folder layout
-    config.py         JSON config (default base, default venv, update source, etc.) + `seed config`'s KNOWN_KEYS
-    confirm.py        shared -y / --preview / --non-interactive handling for destructive commands
-    runlog.py         tees stdout/stderr into ~/seedling/system/logs/, one file per day
-    download.py       SHA-256-verifying download helper (MinGit, VS Code)
-    uv_tool.py        locates + invokes the sandboxed uv binary, tags its output `[uv]`
-    git_tool.py       locates git, bootstraps portable MinGit on Windows, tags streamed output `[git]`
-    fsutil.py         retrying, cwd-aware directory deletion (see "Why deletion is so defensive")
-    colors.py         minimal ANSI color helper (NO_COLOR/non-tty aware)
-    commands/         one module per `seed` command (python, venv, activate, repo,
-                      vscode, kill, update, summary, health-check, config, remove, purge, ...)
-    shell/
-      seed.sh.template   copied to ~/seedling/system/shell/seed.sh at install time
-      seed.ps1.template  copied to ~/seedling/system/shell/seed.ps1 at install time
-```
-
----
-
-## Running the tests
-
-`uvx pytest` from the repo root runs the whole suite (~120 tests, ~40s) —
-uv supplies pytest, and `tests/conftest.py` puts `src/` on the import
-path, so nothing needs installing first. Design guarantees the suite
-enforces:
-
-- **Never touches your real `~/seedling`** — every test rebinds seedling's
-  paths to a throwaway directory, and the machine-wide process killer is
-  disabled for the whole run.
-- **Fully offline** — installer runs use a stub `uv` that logs its
-  invocations; the offline-index tests hand-craft a local wheel and prove
-  both directions (a package in the wheels folder installs; one that
-  isn't fails fast with the internet index disabled); downloads are
-  exercised over `file://` URLs.
-- Real `git`, `bash`, and `powershell` are used where present (git file
-  protocol, installer end-to-end, shell-function behavior) and those
-  tests skip cleanly on machines without them.
+Working on seedling itself — the `seed` commands, the installers, or the shell
+integration? See the **[contributor guide](CONTRIBUTING.md)** for the
+edit → `seed update-commands` loop (including `--from-branch` for tracking a
+fork's branch), the source layout, and running the tests.
 
 ---
 

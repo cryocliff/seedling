@@ -166,7 +166,7 @@ reversible.
   [`seedling.conf`](seedling.conf) — see
   [Deployment configuration](docs/DOCUMENTATION.md#deployment-configuration-seedlingconf).
 
-**Contributing:** run the suite with `uvx pytest` from the repo root (no
-setup needed). See the
-[source layout](docs/DOCUMENTATION.md#source-layout-for-contributors) and
-[running the tests](docs/DOCUMENTATION.md#running-the-tests).
+**Contributing:** working on seedling itself? The
+[contributor guide](docs/CONTRIBUTING.md) covers the edit → `seed update-commands`
+loop, the source layout, and running the tests (`uvx pytest` from the repo
+root — no setup needed).
