@@ -45,6 +45,50 @@ def test_every_command_is_dispatchable(home):
     assert parser_names == set(ALL_COMMANDS) | set(ADMIN_COMMANDS) | _NON_DISPATCH
 
 
+class TestPassthroughForwarding:
+    """install/uninstall/package-list forward everything after the verb to uv
+    verbatim -- including a LEADING option-like token (`install -e .`), which
+    argparse.REMAINDER used to reject with 'unrecognized arguments: -e'."""
+
+    @pytest.fixture
+    def uv_args(self, monkeypatch):
+        from seedling import uv_tool
+        calls: list[list[str]] = []
+        monkeypatch.setattr(uv_tool, "run", lambda a, **k: calls.append(list(a)))
+        return calls
+
+    def test_install_editable_leading_flag(self, run_cli, uv_args):
+        code, out = run_cli("install", "-e", ".")
+        assert code == 0
+        assert uv_args == [["pip", "install", "-e", "."]]
+
+    def test_install_mixed_flags_and_packages(self, run_cli, uv_args):
+        code, out = run_cli("install", "-U", "requests", "pillow")
+        assert code == 0
+        assert uv_args == [["pip", "install", "-U", "requests", "pillow"]]
+
+    def test_uninstall_forwards_flags(self, run_cli, uv_args):
+        code, out = run_cli("uninstall", "-y", "requests")
+        assert code == 0
+        assert uv_args == [["pip", "uninstall", "-y", "requests"]]
+
+    def test_package_list_leading_flag(self, run_cli, uv_args):
+        code, out = run_cli("package-list", "--outdated")
+        assert code == 0
+        assert uv_args == [["pip", "list", "--outdated"]]
+
+    def test_install_empty_still_shows_usage(self, run_cli, uv_args):
+        code, out = run_cli("install")
+        assert code == 1
+        assert "Usage: seed install" in out
+        assert not uv_args
+
+    def test_install_help_flag_shows_argparse_help(self, run_cli, uv_args):
+        code, out = run_cli("install", "-h")
+        assert "usage: seed install" in out
+        assert not uv_args  # -h never reaches uv
+
+
 def test_bare_seed_shows_grouped_help(run_cli):
     code, out = run_cli()
     assert code == 0

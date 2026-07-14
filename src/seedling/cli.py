@@ -378,6 +378,38 @@ def main(argv=None) -> int:
     return code
 
 
+# Commands that forward everything after the verb straight to uv's pip
+# interface. They deliberately bypass argparse: argparse.REMAINDER mishandles a
+# LEADING option-like token, so `seed install -e .` would otherwise fail with
+# "unrecognized arguments: -e". _dispatch_main slices their tail off argv and
+# passes it through verbatim, so any flag order works (-e ., -U pkg, --no-deps).
+def _passthrough_handlers() -> dict:
+    return {
+        "install": install_cmd.run,
+        "uninstall": uninstall_cmd.run,
+        "package-list": list_cmd.list_packages,
+        "download-whl": download_cmd.run_whl,
+        "download-requirements": download_cmd.run_requirements,
+    }
+
+
+def _invoke(handler, args) -> int:
+    """Run a command handler, turning the shared uv/subprocess failures into
+    tidy one-line errors (and Ctrl-C into a clean 130)."""
+    try:
+        return handler(args)
+    except UvNotFound as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as e:
+        print(f"error: `{' '.join(str(a) for a in e.cmd)}` failed "
+              f"(exit code {e.returncode})", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+        return 130
+
+
 def _dispatch_main(argv: list[str]) -> int:
     # Show the custom grouped help for a bare `seed`, `seed -h`, or
     # `seed --help` -- argparse's own auto-generated help (which would
@@ -391,6 +423,18 @@ def _dispatch_main(argv: list[str]) -> int:
     if argv[0] == "help":
         print_grouped_help(show_admin="--admin" in argv)
         return 0
+
+    # Passthrough commands (install/uninstall/package-list/download-*) forward
+    # every remaining token straight to uv -- see _passthrough_handlers. Done
+    # before argparse so option-like args aren't swallowed; a leading -h/--help
+    # still falls through to argparse's per-command help.
+    passthrough = _passthrough_handlers().get(argv[0])
+    if passthrough is not None and not (len(argv) > 1 and argv[1] in ("-h", "--help")):
+        paths.ensure_layout()
+        config.apply_runtime_env()
+        rest = argv[1:]
+        ns = argparse.Namespace(command=argv[0], packages=rest, extra=rest, args=rest)
+        return _invoke(passthrough, ns)
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -451,18 +495,7 @@ def _dispatch_main(argv: list[str]) -> int:
         print_grouped_help()
         return 0 if args.command is None else 1
 
-    try:
-        return handler(args)
-    except UvNotFound as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-    except subprocess.CalledProcessError as e:
-        print(f"error: `{' '.join(str(a) for a in e.cmd)}` failed "
-              f"(exit code {e.returncode})", file=sys.stderr)
-        return 1
-    except KeyboardInterrupt:
-        print("\nCancelled.")
-        return 130
+    return _invoke(handler, args)
 
 
 if __name__ == "__main__":

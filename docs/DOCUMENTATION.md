@@ -667,8 +667,9 @@ seed venv-default myproject
 
 Direct passthrough to `uv pip install <package...>` — everything after
 `install` is forwarded untouched (flags, version pins, multiple packages,
-`-U`/`--upgrade`, etc. all work exactly as they would with `uv pip install`
-directly).
+`-U`/`--upgrade`, an editable `-e .`, etc. all work exactly as they would
+with `uv pip install` directly), including flags given as the very first
+argument.
 
 Prints a warning first (but still proceeds) if `VIRTUAL_ENV` isn't set in
 the environment, since `uv pip` needs a target environment to install into.
@@ -676,6 +677,7 @@ the environment, since `uv pip` needs a target environment to install into.
 ```
 seed install requests
 seed install -U "django>=5,<6" pillow
+seed install -e .                       # editable install of the current project
 ```
 
 ### `seed uninstall <package...>`
