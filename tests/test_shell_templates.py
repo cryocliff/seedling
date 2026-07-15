@@ -161,6 +161,31 @@ class TestPowerShellFunction:
             f"if ($e.Count) {{ exit 1 }} else {{ 'PARSE-OK' }}")
         assert "PARSE-OK" in result.stdout
 
+    def test_install_forwards_dash_e_flag(self, tmp_path):
+        """`seed install -e <path>` must reach the CLI verbatim. A bare `-e`
+        used to die inside the `seed` function as an ambiguous prefix of the
+        common params -ErrorAction/-ErrorVariable (the function was an advanced
+        function); it's now a simple function whose $args passes flags through."""
+        home = tmp_path / "seedling"
+        home.mkdir(parents=True)
+        rendered = tmp_path / "seed.ps1"
+        rendered.write_text(
+            PS_TEMPLATE.read_text().replace("__SEEDLING_HOME_PLACEHOLDER__", str(home)))
+        # Simple stub (automatic $args, no param binding) that echoes what it got.
+        stub = tmp_path / "stub.ps1"
+        stub.write_text('Write-Output ("GOT:" + ($args -join "|"))\n')
+        result = self._run_ps(
+            f"$env:VIRTUAL_ENV = 'keep'; . '{rendered}'; "
+            f"$script:SeedlingCli = '{stub}'; "
+            f"seed install -e C:\\proj\\thing; "
+            # --verbose would be SWALLOWED by the common -Verbose param if the
+            # function were still advanced; assert it reaches the CLI too.
+            f"seed install --verbose requests")
+        assert "GOT:install|-e|C:\\proj\\thing" in result.stdout, \
+            result.stdout + result.stderr
+        assert "GOT:install|--verbose|requests" in result.stdout, \
+            result.stdout + result.stderr
+
     def test_repo_cd_changes_directory(self, tmp_path):
         home = tmp_path / "seedling"
         repo = home / "repo" / "myproj"

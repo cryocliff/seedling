@@ -28,11 +28,11 @@ function script:SeedlingDeactivateIfGone {
 }
 
 function seed {
-    param(
-        [Parameter(ValueFromRemainingArguments = $true)]
-        [string[]]$Args
-    )
-
+    # Deliberately a SIMPLE function (no param()/[CmdletBinding]): that keeps
+    # the automatic $args holding every argument verbatim. An advanced function
+    # would bind parameters, and a bare `-e` (as in `seed install -e .`) then
+    # fails as an ambiguous prefix of the common params -ErrorAction/-ErrorVariable
+    # before seed-cli ever runs. $args passes flags through untouched.
     if ($Args.Count -ge 1 -and $Args[0] -eq "activate") {
         $rest = @($Args[1..($Args.Count - 1)])
         $scriptPath = & $script:SeedlingCli activate @rest --print-path
