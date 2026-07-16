@@ -13,6 +13,14 @@ any of this — they run `install.cmd` from the share and everything works.
 
 ## The short version
 
+> **In a hurry?** For the common share-only case, skip the manual steps: run
+> **`build-offline.cmd`** (`sh ./build-offline.cmd` on macOS/Linux) on a
+> connected machine. It downloads uv, the Python interpreter archives, and all
+> the wheels, then writes a matching `seedling.conf` — see
+> [Putting it together](#putting-it-together-preparing-the-share). The rest of
+> this page explains what it's doing and covers the cases it leaves to you
+> (self-hosted indexes, VS Code, corporate CAs).
+
 Everything is driven by **editing [`seedling.conf`](../seedling.conf)** in the
 copy of the repo you distribute (plus dropping a few binaries in `vendor/`) —
 your users never set environment variables or change anything on their
@@ -288,7 +296,48 @@ installs; users just see a warning with those same commands.
 
 ## Putting it together: preparing the share
 
-On a connected machine:
+### The easy way: `build-offline.cmd`
+
+The repo ships a builder that assembles the entire bundle for you. On a
+**connected** machine, from a checkout of this repo:
+
+```
+build-offline.cmd                 (Windows)
+sh ./build-offline.cmd            (macOS/Linux)
+```
+
+It walks you through every component below, asking before it downloads each
+(or pass `--yes` to build the whole thing unattended), and produces a ready
+folder:
+
+```
+offline-bundle/
+  seedling/          <- repo copy, with vendor/uv filled in and seedling.conf written
+  python-builds/     <- the exact interpreter archive your shipped uv wants
+  wheels/            <- hatchling + the default venv packages (+ any --packages you add)
+```
+
+Copy that folder to your share and you're done — the generated `seedling.conf`
+already points at the three paths. Useful flags:
+
+| Flag | Purpose |
+|---|---|
+| `--yes` | Build unattended, taking the default answer for every step |
+| `--python 3.12,3.11` | Which interpreter version(s) to mirror (default: newest) |
+| `--packages pandas,polars` | Extra wheels to stock beyond the defaults |
+| `--deploy-root S:\tools` | Bake the final share path into `seedling.conf` |
+| `--dry-run` | Show the plan and exit without downloading |
+
+It is **not** a `seed` command — it prepares the distribution, so it runs from
+the checkout before seedling is installed anywhere. It needs Python 3.9+ and
+internet on the build machine, and targets the platform you run it on (build on
+the same OS/arch as your offline machines). VS Code and corporate CA certs stay
+manual (see #6 and the CA section); everything else is automatic.
+
+### By hand
+
+If you'd rather assemble it yourself (or need VS Code pre-seeded), the same
+layout on a connected machine is:
 
 ```
 S:\tools\seedling\                     <- a copy of this repo

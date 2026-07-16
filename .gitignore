@@ -14,3 +14,7 @@ docs/index.md
 # portable git, pre-seeded VS Code. Never committed; placed by whoever
 # prepares an offline share.
 vendor/
+
+# Output of build-offline.cmd (the assembled offline bundle). A distribution
+# artifact, not source -- carried to the air-gapped share, never committed.
+offline-bundle/

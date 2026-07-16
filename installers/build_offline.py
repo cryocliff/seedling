@@ -1,0 +1,559 @@
+#!/usr/bin/env python3
+"""
+build_offline.py -- assemble a self-contained, air-gapped seedling bundle.
+
+Run this on a CONNECTED machine (it needs the internet). It downloads every
+piece an offline install needs, lays them out the way seedling expects, writes
+a matching seedling.conf, and walks you through each step -- asking before it
+downloads anything (or pass --yes to let it build the whole thing unattended).
+
+The result is a folder you copy to a share or removable media and install from
+on the air-gapped side, with no internet access required there. See
+docs/OFFLINE.md for the full deployment story; this tool automates its
+"Putting it together" section.
+
+Not a `seed` subcommand on purpose: it prepares the distribution, so it runs
+straight from a repo checkout (`build-offline.cmd`) before seedling is installed
+anywhere.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.parse
+import urllib.request
+import zipfile
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+# Reuse seedling's own checksum-verifying downloader and color helpers rather
+# than reimplementing them -- both are import-only, no install required.
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from seedling import colors, download  # noqa: E402
+
+UV_LATEST_URL = "https://github.com/astral-sh/uv/releases/latest/download/{asset}"
+PBS_RELEASE_BASE = ("https://github.com/astral-sh/python-build-standalone"
+                    "/releases/download")
+GIT_WIN_LATEST_API = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+
+# What the offline package index MUST contain (see docs/OFFLINE.md #4):
+#   hatchling  -- uv builds seed-cli from source with it, at install AND every
+#                 `seed update-commands`; without it the install can't finish.
+#   the default venv packages -- created in every new venv.
+# Extra packages your users will `seed install` get appended with --packages.
+REQUIRED_PACKAGES = ["hatchling", "ipython", "ruff", "ipykernel", "pip"]
+
+
+# --------------------------------------------------------------------------
+# small ui helpers
+# --------------------------------------------------------------------------
+def step(n: int, title: str) -> None:
+    print()
+    print(colors.header(f"[{n}] {title}"))
+
+
+def info(msg: str) -> None:
+    print(f"    {msg}")
+
+
+def ok(msg: str) -> None:
+    print("    " + colors.ok(msg))
+
+
+def warn(msg: str) -> None:
+    print("    " + colors.warn(msg))
+
+
+def ask(question: str, *, default: bool, auto: bool) -> bool:
+    """Yes/no prompt. `auto` (from --yes) answers with the default and echoes
+    the choice so an unattended run is still readable."""
+    suffix = "[Y/n]" if default else "[y/N]"
+    if auto:
+        print(f"    {question} {suffix} -> {'yes' if default else 'no'} (--yes)")
+        return default
+    while True:
+        try:
+            reply = input(f"    {question} {suffix} ").strip().lower()
+        except EOFError:
+            return default
+        if not reply:
+            return default
+        if reply in ("y", "yes"):
+            return True
+        if reply in ("n", "no"):
+            return False
+
+
+def _progress(done: int, total: int) -> None:
+    if not (total and sys.stdout.isatty()):
+        return  # a redirected/CI log doesn't benefit from \r updates
+    pct = done * 100 // total
+    print(f"\r    ... {pct:3d}%  ({done // 1024} / {total // 1024} KiB)",
+          end="", flush=True)
+    if done >= total:
+        print()
+
+
+def fetch(url: str, dest: Path, label: str) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    download.fetch(url, dest, label=label, on_progress=_progress)
+
+
+# --------------------------------------------------------------------------
+# platform / asset resolution
+# --------------------------------------------------------------------------
+def normalized_arch(machine: str) -> str:
+    m = machine.lower()
+    if m in ("amd64", "x86_64", "x64"):
+        return "x86_64"
+    if m in ("arm64", "aarch64"):
+        return "aarch64"
+    return m  # let it flow through; the caller reports if unsupported
+
+
+def uv_asset_name(system: str, arch: str) -> str:
+    """The uv release asset for a platform (astral-sh/uv GitHub releases)."""
+    if system == "Windows":
+        return f"uv-{arch}-pc-windows-msvc.zip"
+    if system == "Linux":
+        return f"uv-{arch}-unknown-linux-gnu.tar.gz"
+    if system == "Darwin":
+        return f"uv-{arch}-apple-darwin.tar.gz"
+    raise ValueError(f"unsupported OS for uv download: {system}")
+
+
+def parse_pbs_target(uv_verbose_stderr: str) -> tuple[str, str] | None:
+    """Pull the release tag + archive filename out of the `Downloading ...` line
+    uv prints (with -v) for the interpreter it wants. Returns (tag, filename)
+    with the filename URL-decoded (e.g. %2B -> +), or None if not found.
+
+    Example line:
+      DEBUG Downloading file:///.../20241016/cpython-3.12.7%2B2024...tar.gz
+    """
+    m = re.search(r"/(\d{8})/(cpython-[^/\s]+?\.tar\.(?:gz|zst))",
+                  uv_verbose_stderr)
+    if not m:
+        return None
+    tag = m.group(1)
+    filename = urllib.parse.unquote(m.group(2))
+    return tag, filename
+
+
+# --------------------------------------------------------------------------
+# component builders
+# --------------------------------------------------------------------------
+def _uv_env(*, cache: Path, extra: dict | None = None) -> dict:
+    env = os.environ.copy()
+    env["UV_CACHE_DIR"] = str(cache)
+    if extra:
+        env.update(extra)
+    return env
+
+
+def _extract_uv_binary(archive: Path, into: Path) -> list[str]:
+    """Extract uv (+uvx) from a release archive into `into`. Returns the names
+    placed. Handles both the flat zip and the folder-wrapped tarball layouts."""
+    into.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        if archive.suffix == ".zip":
+            with zipfile.ZipFile(archive) as z:
+                z.extractall(tmp)
+        else:
+            with tarfile.open(archive) as t:
+                t.extractall(tmp)
+        placed = []
+        for name in ("uv", "uv.exe", "uvx", "uvx.exe"):
+            for found in tmp.rglob(name):
+                target = into / name
+                shutil.copy2(found, target)
+                if os.name != "nt":
+                    target.chmod(0o755)
+                placed.append(name)
+                break
+    return placed
+
+
+def build_uv(vendor_uv: Path, system: str, arch: str) -> Path | None:
+    """Download uv into vendor/uv/. Returns the path to the uv executable."""
+    exe_name = "uv.exe" if system == "Windows" else "uv"
+    existing = vendor_uv / exe_name
+    if existing.exists():
+        ok(f"uv already present at {existing} -- skipping download.")
+        return existing
+
+    asset = uv_asset_name(system, arch)
+    url = UV_LATEST_URL.format(asset=asset)
+    info(f"Downloading the latest uv ({asset}) ...")
+    with tempfile.TemporaryDirectory() as td:
+        archive = Path(td) / asset
+        try:
+            fetch(url, archive, label="uv")
+            placed = _extract_uv_binary(archive, vendor_uv)
+        except Exception as e:  # noqa: BLE001 -- report and let caller decide
+            warn(f"uv download failed: {e}")
+            return None
+    if exe_name not in placed:
+        warn("uv archive downloaded but no uv binary was found inside it.")
+        return None
+    ok(f"uv placed in {vendor_uv} ({', '.join(placed)}).")
+    return vendor_uv / exe_name
+
+
+def build_python_mirror(uv_exe: Path, versions: list[str], mirror_dir: Path,
+                        cache: Path) -> list[str]:
+    """Populate `mirror_dir` with the exact python-build-standalone archives the
+    shipped uv wants, laid out as <tag>/<filename> so a `file://` mirror
+    resolves offline. The trick: ask uv (with a bogus local mirror) which
+    archive it would fetch, then mirror that one asset from the real upstream --
+    so the bundle always matches the uv version you're shipping.
+
+    Returns the list of X.Y versions actually mirrored (so the wheel step can
+    target the same interpreter)."""
+    mirrored: list[str] = []
+    for version in versions:
+        with tempfile.TemporaryDirectory() as td:
+            empty = Path(td) / "empty-mirror"
+            empty.mkdir()
+            env = _uv_env(cache=cache, extra={
+                "UV_PYTHON_INSTALL_MIRROR": empty.as_uri(),
+                "UV_PYTHON_INSTALL_DIR": str(Path(td) / "py"),
+            })
+            probe = [str(uv_exe), "python", "install", "-v"]
+            if version:
+                probe.append(version)
+            result = subprocess.run(probe, env=env, capture_output=True,
+                                    text=True)
+            target = parse_pbs_target(result.stderr + result.stdout)
+        if target is None:
+            warn(f"couldn't determine the interpreter archive for "
+                 f"'{version or 'newest'}' from uv -- skipping it.")
+            continue
+        tag, filename = target
+        minor = _minor_version(filename)
+        url = f"{PBS_RELEASE_BASE}/{tag}/{urllib.parse.quote(filename)}"
+        dest = mirror_dir / tag / filename
+        if dest.exists():
+            ok(f"{filename} already mirrored -- skipping.")
+            if minor:
+                mirrored.append(minor)
+            continue
+        info(f"Mirroring {filename} (Python {version or 'newest'}) ...")
+        try:
+            fetch(url, dest, label=filename)
+            if minor:
+                mirrored.append(minor)
+        except Exception as e:  # noqa: BLE001
+            warn(f"failed to download {filename}: {e}")
+    return mirrored
+
+
+def _minor_version(pbs_filename: str) -> str | None:
+    """'cpython-3.12.13+2026...' -> '3.12'."""
+    m = re.match(r"cpython-(\d+\.\d+)\.", pbs_filename)
+    return m.group(1) if m else None
+
+
+def build_wheels(uv_exe: Path, packages: list[str], wheels_dir: Path,
+                 py_version: str | None, cache: Path) -> bool:
+    """Download every wheel (and its dependencies) the offline index needs, via
+    `uvx pip download` -- the same mechanism as `seed download-whl`."""
+    wheels_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [str(uv_exe), "tool", "run", "--from", "pip", "pip", "download",
+           "--dest", str(wheels_dir), *packages]
+    if py_version:
+        # Match the interpreter you're shipping so platform/abi wheels line up.
+        # pip requires --only-binary=:all: alongside --python-version (it can't
+        # build sdists for a Python it isn't running) -- which is what we want
+        # anyway: an offline machine has no toolchain to build sdists.
+        cmd += ["--python-version", py_version, "--only-binary=:all:"]
+    info("Resolving and downloading wheels (hatchling + default packages"
+         + (" + extras" if len(packages) > len(REQUIRED_PACKAGES) else "") + ") ...")
+    info("Packages: " + ", ".join(packages))
+    try:
+        subprocess.run(cmd, env=_uv_env(cache=cache), check=True)
+    except subprocess.CalledProcessError as e:
+        warn(f"`pip download` failed (exit {e.returncode}). See the output above.")
+        return False
+    count = len(list(wheels_dir.glob("*.whl")))
+    ok(f"{count} wheel(s) (plus any source archives) in {wheels_dir}.")
+    return True
+
+
+def build_mingit(vendor_git: Path) -> bool:
+    """Download portable MinGit (Windows) into vendor/git/. Optional -- only
+    needed for `seed repo-clone` / URL-based updates where there's no system
+    git on the offline machines."""
+    if any(vendor_git.rglob("git.exe")):
+        ok(f"git already present in {vendor_git} -- skipping.")
+        return True
+    info("Looking up the latest MinGit release ...")
+    try:
+        req = urllib.request.Request(
+            GIT_WIN_LATEST_API, headers={"User-Agent": "seedling-offline-builder"})
+        import json
+        with urllib.request.urlopen(req) as resp:
+            data = json.load(resp)
+        asset = next(
+            a for a in data["assets"]
+            if re.match(r"MinGit-.*-64-bit\.zip$", a["name"])
+            and "busybox" not in a["name"].lower())
+    except Exception as e:  # noqa: BLE001
+        warn(f"couldn't find a MinGit asset: {e}")
+        return False
+    with tempfile.TemporaryDirectory() as td:
+        archive = Path(td) / asset["name"]
+        info(f"Downloading {asset['name']} ...")
+        try:
+            fetch(asset["browser_download_url"], archive, label="MinGit")
+            vendor_git.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(archive) as z:
+                z.extractall(vendor_git)
+        except Exception as e:  # noqa: BLE001
+            warn(f"MinGit download/extract failed: {e}")
+            return False
+    ok(f"MinGit extracted into {vendor_git}.")
+    return True
+
+
+# --------------------------------------------------------------------------
+# staging + config
+# --------------------------------------------------------------------------
+def stage_repo(output: Path) -> Path:
+    """Copy the repo into <output>/seedling (the thing users install from),
+    excluding history/caches/tests. Returns the copy's path."""
+    seedling_copy = output / "seedling"
+    if seedling_copy.exists():
+        ok(f"repo copy already staged at {seedling_copy} -- reusing it.")
+        return seedling_copy
+    info(f"Copying the repo into {seedling_copy} ...")
+    shutil.copytree(
+        REPO_ROOT, seedling_copy,
+        ignore=shutil.ignore_patterns(
+            ".git", "__pycache__", "*.pyc", "offline-bundle", ".pytest_cache",
+            ".claude"))
+    return seedling_copy
+
+
+def write_conf(conf_path: Path, values: dict[str, str]) -> None:
+    """Set KEY="value" entries in a seedling.conf, replacing existing lines and
+    appending any that are missing. Mirrors the installers' conf format."""
+    text = conf_path.read_text(encoding="utf-8") if conf_path.exists() else ""
+    for key, value in values.items():
+        line = f'{key}="{value}"'
+        pattern = rf'^{re.escape(key)}=.*$'
+        if re.search(pattern, text, flags=re.M):
+            # A function replacement -- never a string -- so backslashes in a
+            # Windows path (C:\Users\...) aren't read as regex escapes (\U ...).
+            text = re.sub(pattern, lambda _m: line, text, flags=re.M)
+        else:
+            text = text.rstrip("\n") + "\n" + line + "\n"
+    conf_path.write_text(text, encoding="utf-8")
+
+
+# --------------------------------------------------------------------------
+# main walkthrough
+# --------------------------------------------------------------------------
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="build-offline",
+        description="Assemble a self-contained, offline seedling bundle.")
+    parser.add_argument(
+        "-o", "--output", default=str(REPO_ROOT / "offline-bundle"),
+        help="Where to assemble the bundle (default: ./offline-bundle).")
+    parser.add_argument(
+        "--python", dest="pythons", default="",
+        help="Comma-separated Python versions to mirror (e.g. 3.12,3.11). "
+             "Default: the newest stable your shipped uv resolves.")
+    parser.add_argument(
+        "--packages", default="",
+        help="Extra packages to add to the offline wheel index, "
+             "comma-separated (on top of hatchling + the default venv packages).")
+    parser.add_argument(
+        "--deploy-root", default="",
+        help="The path the bundle will live at on the TARGET machines (e.g. "
+             r"S:\tools). seedling.conf is written with paths under it. "
+             "Default: the output folder's own absolute path.")
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="Answer every prompt with its default -- build the whole bundle "
+             "unattended.")
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Show the plan (platform, versions, destinations) and exit "
+             "without downloading anything.")
+    args = parser.parse_args(argv)
+
+    auto = args.yes
+    output = Path(args.output).expanduser().resolve()
+    system = platform.system()
+    arch = normalized_arch(platform.machine())
+    versions = [v.strip() for v in args.pythons.split(",") if v.strip()] or [""]
+    extra_packages = [p.strip() for p in args.packages.split(",") if p.strip()]
+    packages = REQUIRED_PACKAGES + [p for p in extra_packages
+                                    if p not in REQUIRED_PACKAGES]
+
+    print(colors.bold("seedling offline bundle builder"))
+    print("Builds a folder you carry to an air-gapped machine and install from")
+    print("with no internet. Run this on a connected machine. Full guide: "
+          "docs/OFFLINE.md")
+    print()
+    print(f"  Building on : {system} / {arch}")
+    print("  " + colors.warn(
+        "The bundle targets THIS platform. Build on the same OS/arch as your "
+        "offline machines."))
+    print(f"  Output      : {output}")
+    deploy_root = (args.deploy_root or str(output)).rstrip("/\\")
+    print(f"  Deploy path : {deploy_root}  (edit seedling.conf if this changes)")
+    print(f"  Python      : {', '.join(v or 'newest' for v in versions)}")
+    print(f"  Wheels      : {', '.join(packages)}")
+
+    if args.dry_run:
+        print()
+        print(colors.header("Dry run -- nothing downloaded. Re-run without "
+                            "--dry-run to build."))
+        return 0
+
+    print()
+    if not ask("Ready to build the bundle here?", default=True, auto=auto):
+        print("Aborted; nothing was written.")
+        return 0
+
+    output.mkdir(parents=True, exist_ok=True)
+    python_builds = output / "python-builds"
+    wheels = output / "wheels"
+    # uv's download cache lives in the system temp dir, NOT inside the bundle --
+    # otherwise it would be copied to the share. Reused across runs to speed
+    # re-builds.
+    cache = Path(tempfile.gettempdir()) / "seedling-offline-cache"
+
+    # 1. Stage the repo copy (everything else lands relative to it).
+    step(1, "Stage the seedling source")
+    info("A copy of this repo is what your users actually install from; the "
+         "downloads below fill in its vendor/ folder and its siblings.")
+    seedling_copy = stage_repo(output)
+    vendor = seedling_copy / "vendor"
+
+    # 2. uv (required -- nothing else can be resolved without it).
+    step(2, "uv binary (required)")
+    info("seedling never assumes uv is installed; it ships this exact binary "
+         "in vendor/uv/ and runs it directly.")
+    uv_exe = None
+    if ask("Download uv now?", default=True, auto=auto):
+        uv_exe = build_uv(vendor / "uv", system, arch)
+    if uv_exe is None:
+        warn("Without uv, the interpreter mirror and wheels can't be built.")
+        if not (vendor / "uv").exists():
+            warn("Fix the uv step and re-run to finish the bundle.")
+
+    # 3. Python interpreter mirror (required for a working default env).
+    step(3, "Python interpreters (SEEDLING_PYTHON_MIRROR)")
+    info("`seed python` downloads CPython from the internet; offline it reads "
+         "these mirrored archives instead.")
+    mirrored_versions: list[str] = []
+    if uv_exe and ask("Mirror the Python interpreter archive(s) now?",
+                      default=True, auto=auto):
+        mirrored_versions = build_python_mirror(uv_exe, versions, python_builds,
+                                                cache)
+    elif not uv_exe:
+        warn("Skipped -- needs uv (step 2).")
+    mirror_ok = bool(mirrored_versions)
+
+    # 4. Wheel index (required -- hatchling builds seed-cli).
+    step(4, "Python packages (SEEDLING_PACKAGE_INDEX)")
+    info("Every package install (incl. building seed-cli with hatchling, and "
+         "each new venv) resolves from this wheel folder offline.")
+    wheels_ok = False
+    if uv_exe and ask("Download the wheels now?", default=True, auto=auto):
+        # Target the interpreter we actually mirrored, so abi/platform wheels
+        # match; fall back to an explicit --python if the mirror was skipped.
+        py_for_wheels = (mirrored_versions[0] if mirrored_versions
+                         else next((v for v in versions if v), None))
+        wheels_ok = build_wheels(uv_exe, packages, wheels, py_for_wheels, cache)
+    elif not uv_exe:
+        warn("Skipped -- needs uv (step 2).")
+
+    # 5. MinGit (optional, Windows).
+    step(5, "git for Windows (optional)")
+    info("Only needed if your offline machines have no system git and you use "
+         "`seed repo-clone` or URL-based `seed update-commands`.")
+    if system == "Windows":
+        if ask("Download portable MinGit into vendor/git/?",
+               default=False, auto=auto):
+            build_mingit(vendor / "git")
+    else:
+        info("Building on a non-Windows host; MinGit is Windows-only. Skipped.")
+
+    # 6. VS Code (optional, guided -- too large/stateful to fetch reliably here).
+    step(6, "VS Code (optional -- guided)")
+    info("There's no supported VS Code mirror, so pre-seed it by hand:")
+    info("  1. On a connected machine WITH seedling installed, run: seed vscode")
+    info("  2. Copy ~/seedling/extensions/vscode/ into "
+         + colors.bold(str(vendor / "vscode")))
+    info("The installer then places it and never re-downloads. Or skip VS Code "
+         "entirely -- everything else works without it.")
+
+    # 7. Corporate CA certs (optional, user-supplied).
+    step(7, "Corporate CA certificates (optional)")
+    if ask("Create a vendor/certs/ folder for your CA bundle?",
+           default=False, auto=auto):
+        (vendor / "certs").mkdir(parents=True, exist_ok=True)
+        info(f"Drop your .pem/.crt files into {vendor / 'certs'} -- the "
+             "installer trusts them everywhere (uv, git, downloads).")
+    else:
+        info("Skip unless a TLS-inspecting proxy re-signs HTTPS on your network.")
+
+    # 8. seedling.conf.
+    step(8, "Write seedling.conf")
+    conf_values = {
+        "SEEDLING_REPO_URL": f"{deploy_root}\\seedling" if system == "Windows"
+        else f"{deploy_root}/seedling",
+        "SEEDLING_PYTHON_MIRROR": f"{deploy_root}\\python-builds"
+        if system == "Windows" else f"{deploy_root}/python-builds",
+        "SEEDLING_PACKAGE_INDEX": f"{deploy_root}\\wheels" if system == "Windows"
+        else f"{deploy_root}/wheels",
+    }
+    write_conf(seedling_copy / "seedling.conf", conf_values)
+    ok(f"Wrote {seedling_copy / 'seedling.conf'} pointing at {deploy_root}.")
+    for k, v in conf_values.items():
+        info(f"  {k}={v}")
+
+    # Summary.
+    print()
+    print(colors.header("Done. Bundle assembled at:"))
+    print(f"  {output}")
+    print()
+    print("Layout:")
+    print(f"  {output}{os.sep}seedling{os.sep}        <- users run install.cmd from here")
+    print(f"  {output}{os.sep}python-builds{os.sep}   <- SEEDLING_PYTHON_MIRROR  "
+          + ("(populated)" if mirror_ok else colors.warn("(empty -- redo step 3)")))
+    print(f"  {output}{os.sep}wheels{os.sep}          <- SEEDLING_PACKAGE_INDEX  "
+          + ("(populated)" if wheels_ok else colors.warn("(empty -- redo step 4)")))
+    print()
+    print("Next steps:")
+    print(f"  1. Copy the whole {output.name}{os.sep} folder to {deploy_root} on "
+          "your target/share.")
+    print("  2. On an offline machine, run install.cmd from the copied "
+          "seedling/ folder.")
+    print("  3. It reads seedling.conf and installs entirely from the bundle.")
+    if deploy_root == str(output):
+        warn("Deploy path = the build path. If you move the folder, update the "
+             "three paths in seedling/seedling.conf (or re-run with "
+             "--deploy-root).")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        raise SystemExit(130)

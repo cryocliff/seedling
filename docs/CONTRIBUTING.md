@@ -69,10 +69,13 @@ README.md
 seedling.conf         deployment config: install/update source URL (or directory) + install-time settings
 install.cmd           generic installer entry point: batch on Windows, `sh ./install.cmd` on macOS/Linux
 uninstall.cmd         generic uninstaller entry point (same dual-platform trick)
+build-offline.cmd     builds an offline distribution bundle (dual-platform launcher; NOT a seed command)
 installers/
   install.sh          the real POSIX installer (also what the curl one-liner runs)
   install.ps1         the real Windows installer (also what the irm one-liner runs)
   uninstall.sh / uninstall.ps1   full removal, including the shell hook (same end state as `seed purge`)
+  build_offline.py    the offline bundle builder (downloads uv + interpreters + wheels, writes seedling.conf)
+  build_offline.sh    POSIX launcher for build-offline.cmd (finds Python, runs build_offline.py)
 docs/
   DOCUMENTATION.md    the full documentation
   OFFLINE.md          fully-offline / air-gapped deployment guide
